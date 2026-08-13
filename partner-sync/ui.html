@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>협력점 동기화</title>
+  <style>
+    :root{--bg:#0f1420;--panel:#171e2e;--panel2:#1f2940;--line:#2a3552;--text:#e7ecf5;--muted:#93a0bd;--accent:#4f8cff;--green:#33c37e;--red:#ff5d6c;--amber:#ffb020}
+    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,"Malgun Gothic",sans-serif;font-size:14px}
+    .wrap{max-width:840px;margin:0 auto;padding:24px}
+    h1{font-size:20px;margin:0 0 4px}.sub{color:var(--muted);font-size:13px;margin-bottom:18px}
+    .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px;margin-bottom:16px}
+    label{display:block;font-size:12px;color:var(--muted);margin-bottom:5px;font-weight:600}
+    input[type=text],input[type=password]{width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--text);padding:9px 11px;border-radius:8px;font-size:14px;outline:none}
+    input:focus{border-color:var(--accent)}
+    .row{display:flex;gap:12px}.row>div{flex:1}
+    .otp-toggle{display:flex;align-items:center;gap:8px;margin:14px 0}
+    .otp-toggle input{width:16px;height:16px}
+    .otp-box{display:none}.otp-box.show{display:block}
+    .btns{display:flex;gap:10px;margin-top:16px}
+    .btn{border:1px solid var(--line);background:var(--panel2);color:var(--text);padding:10px 16px;border-radius:9px;cursor:pointer;font-size:14px;font-weight:700}
+    .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+    .btn.ghost{background:transparent}.btn:disabled{opacity:.5;cursor:not-allowed}
+    .warn{background:rgba(255,176,32,.1);border:1px solid rgba(255,176,32,.35);color:var(--amber);padding:10px 12px;border-radius:8px;font-size:12px;margin-bottom:16px}
+    #log{background:#0b0f18;border:1px solid var(--line);border-radius:8px;padding:12px;height:220px;overflow:auto;font-family:monospace;font-size:12px;white-space:pre-wrap;color:#b6c2dd}
+    .res{display:none;margin-top:14px}.res.show{display:block}
+    table{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px}
+    th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line)}th{color:var(--muted);font-size:12px}
+    .chip{padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700}
+    .g-판매점{background:rgba(240,136,62,.15);color:#f0883e}.g-협력점{background:rgba(79,140,255,.15);color:#4f8cff}.g-자점{background:rgba(155,140,255,.15);color:#9b8cff}
+    .badge{font-size:12px;padding:3px 9px;border-radius:999px}
+    .ok{color:var(--green)}.err{color:var(--red)}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>협력점 동기화</h1>
+    <div class="sub">navergg.kr 로그인 → 지난주 개통 → 신규 협력점 자동 추가 (이 PC에서만 실행됩니다)</div>
+
+    <div class="warn">⚠️ 입력한 아이디·비밀번호·인증번호는 이 PC의 로컬 서버로만 전송되며 저장되지 않습니다.</div>
+
+    <div class="card">
+      <div class="row">
+        <div><label>아이디</label><input id="id" type="text" autocomplete="off" /></div>
+        <div><label>비밀번호</label><input id="pw" type="password" autocomplete="off" /></div>
+      </div>
+
+      <div class="otp-toggle">
+        <input id="useOtp" type="checkbox" />
+        <label for="useOtp" style="margin:0">휴대폰 인증번호 사용 (안 눌러도 로그인되면 체크 해제)</label>
+      </div>
+      <div id="otpBox" class="otp-box">
+        <label>휴대폰 인증번호</label><input id="otp" type="text" autocomplete="off" />
+      </div>
+
+      <div class="btns">
+        <button id="previewBtn" class="btn ghost">미리보기(반영 안 함)</button>
+        <button id="runBtn" class="btn primary">동기화 실행</button>
+        <span id="status" class="badge" style="align-self:center"></span>
+      </div>
+    </div>
+
+    <div class="card">
+      <label>실행 로그</label>
+      <div id="log"></div>
+      <div id="res" class="res">
+        <div id="resSummary"></div>
+        <div id="newsWrap"></div>
+        <div id="changesWrap"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    var $ = function(s){return document.querySelector(s)};
+    $('#useOtp').addEventListener('change', function(){ $('#otpBox').classList.toggle('show', this.checked); });
+
+    function logLine(m){ var el=$('#log'); el.textContent += m + '\n'; el.scrollTop=el.scrollHeight; }
+    function setStatus(t,cls){ var s=$('#status'); s.textContent=t; s.className='badge '+(cls||''); }
+
+    async function run(dryRun){
+      $('#log').textContent=''; $('#res').classList.remove('show');
+      $('#newsWrap').innerHTML=''; $('#changesWrap').innerHTML='';
+      $('#runBtn').disabled=true; $('#previewBtn').disabled=true;
+      setStatus(dryRun?'미리보기 중…':'동기화 중…','');
+      var payload={ id:$('#id').value.trim(), pw:$('#pw').value, useOtp:$('#useOtp').checked, otp:$('#otp').value.trim(), dryRun:dryRun };
+      try{
+        var resp=await fetch('/sync',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+        var reader=resp.body.getReader(); var dec=new TextDecoder(); var buf='';
+        while(true){
+          var {value,done}=await reader.read(); if(done) break;
+          buf+=dec.decode(value,{stream:true}); var lines=buf.split('\n'); buf=lines.pop();
+          for(var i=0;i<lines.length;i++){ if(!lines[i].trim())continue; handle(JSON.parse(lines[i])); }
+        }
+      }catch(e){ logLine('오류: '+e.message); setStatus('실패','err'); }
+      $('#runBtn').disabled=false; $('#previewBtn').disabled=false;
+    }
+
+    function handle(evt){
+      if(evt.type==='log') logLine('· '+evt.msg);
+      else if(evt.type==='error'){ logLine('❌ '+evt.msg); setStatus('실패','err'); }
+      else if(evt.type==='result'){ showResult(evt.data); }
+    }
+
+    function showResult(d){
+      setStatus(d.ok?'완료':'실패', d.ok?'ok':'err');
+      $('#res').classList.add('show');
+      $('#resSummary').innerHTML='개통 '+d.activations+'건 · 신규 '+d.news.length+'개 · 기호변경 '+d.changes.length+'개'
+        + (d.added? (' · <b class="ok">'+d.added+'개 추가됨</b>') : ' · (반영 안 함)');
+      if(d.news.length){
+        var h='<table><tr><th>구분</th><th>업체명</th><th>소속(원문)</th><th>마커</th></tr>';
+        d.news.forEach(function(c){ h+='<tr><td><span class="chip g-'+c.업체구분+'">'+c.업체구분+'</span></td><td>'+esc(c.업체명)+'</td><td>'+esc(c.소속원문)+'</td><td>'+(c.전달마커||'-')+'</td></tr>'; });
+        $('#newsWrap').innerHTML='<h4>신규 업체</h4>'+h+'</table>';
+      }
+      if(d.changes.length){
+        var h2='<table><tr><th>업체명</th><th>이전</th><th>→ 변경</th></tr>';
+        d.changes.forEach(function(c){ h2+='<tr><td>'+esc(c.업체명)+'</td><td>'+esc(c.이전소속)+'</td><td>'+esc(c.새소속)+'</td></tr>'; });
+        $('#changesWrap').innerHTML='<h4>기호 변경 감지(확인 필요)</h4>'+h2+'</table>';
+      }
+    }
+    function esc(s){return String(s==null?'':s).replace(/[&<>]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;'}[c]})}
+
+    $('#runBtn').addEventListener('click', function(){ run(false); });
+    $('#previewBtn').addEventListener('click', function(){ run(true); });
+  </script>
+</body>
+</html>

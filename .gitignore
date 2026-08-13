@@ -1,5 +1,11 @@
 node_modules/
-package.json
 package-lock.json
 .DS_Store
 *.log
+
+# 루트 테스트용 npm 아티팩트 (partner-sync/package.json 은 커밋함)
+/package.json
+
+# 로컬 동기화 도구: 자격증명/설정은 커밋 금지
+partner-sync/config.json
+partner-sync/downloads/

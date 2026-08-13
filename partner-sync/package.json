@@ -1,0 +1,14 @@
+{
+  "name": "partner-sync",
+  "version": "0.1.0",
+  "private": true,
+  "description": "navergg.kr 어드민에서 지난주 개통 신규 협력점을 구글시트로 동기화하는 로컬 도구",
+  "scripts": {
+    "start": "node server.js",
+    "postinstall": "playwright install chromium"
+  },
+  "dependencies": {
+    "playwright": "^1.47.0",
+    "xlsx": "^0.18.5"
+  }
+}
