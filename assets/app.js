@@ -3,6 +3,8 @@
   'use strict';
   var CFG = window.APP_CONFIG || {};
   var LIVE = !!CFG.API_URL;
+  var TOKEN = '', USER = '';
+  try { TOKEN = localStorage.getItem('partner_token') || ''; USER = localStorage.getItem('partner_user') || ''; } catch (e) {}
 
   /* ============ 분류 엔진 (build_seed.py 와 동일 규칙) ============ */
   var SALES_SYMS = ['■■', '□□', '■', '□'];
@@ -73,18 +75,70 @@
       return fetch('data/seed.json').then(function (r) { return r.json(); })
         .then(function (d) { return d.companies || []; });
     }
-    return fetch(CFG.API_URL + '?action=list', { method: 'GET' })
+    return fetch(CFG.API_URL + '?action=list&token=' + encodeURIComponent(TOKEN), { method: 'GET' })
       .then(function (r) { return r.json(); })
       .then(function (d) { if (!d.ok) throw new Error(d.error || 'list 실패'); return d.companies || []; });
   }
   function apiPost(payload) {
-    payload.token = CFG.WRITE_TOKEN || '';
+    payload.token = TOKEN;
     return fetch(CFG.API_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // preflight 회피
       body: JSON.stringify(payload)
     }).then(function (r) { return r.json(); })
       .then(function (d) { if (!d.ok) throw new Error(d.error || '요청 실패'); return d; });
+  }
+
+  /* ============ 인증 ============ */
+  function authPost(action, payload) {
+    payload = payload || {}; payload.action = action;
+    return fetch(CFG.API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(payload) })
+      .then(function (r) { return r.json(); });
+  }
+  var AUTH_MODE = 'login';
+  function showAuth(mode) {
+    AUTH_MODE = mode;
+    $('#authScreen').style.display = 'flex';
+    $('#appWrap').style.display = 'none';
+    $('#au_msg').textContent = ''; $('#au_msg').className = 'auth-msg';
+    $('#au_nameField').style.display = mode === 'register' ? 'flex' : 'none';
+    $('#authSub').textContent = mode === 'register' ? '처음 오셨네요 — 관리자 계정을 만드세요' : '로그인이 필요합니다';
+    $('#au_submit').textContent = mode === 'register' ? '관리자 계정 만들기' : '로그인';
+    $('#au_hint').innerHTML = mode === 'register' ? '이 아이디·비밀번호로 앞으로 로그인합니다.<br>꼭 기억해 두세요!' : '';
+    $('#au_id').focus();
+  }
+  function enterApp() {
+    $('#authScreen').style.display = 'none';
+    $('#appWrap').style.display = '';
+    $('#userName').textContent = USER ? ('● ' + USER) : '';
+    $('#userName').className = 'badge-mode live';
+    load();
+  }
+  function forceLogin(msg) {
+    TOKEN = ''; USER = '';
+    try { localStorage.removeItem('partner_token'); localStorage.removeItem('partner_user'); } catch (e) {}
+    showAuth('login');
+    if (msg) $('#au_msg').textContent = msg;
+  }
+  function startAuthGate() {
+    if (!LIVE) { enterApp(); return; }          // 데모 모드: 인증 없음
+    if (TOKEN) { enterApp(); return; }           // 토큰 있으면 시도(무효면 load에서 처리)
+    authPost('hasUsers', {}).then(function (d) {
+      showAuth(d && d.hasUsers ? 'login' : 'register');
+    }).catch(function () { showAuth('login'); });
+  }
+  function doAuth() {
+    var id = $('#au_id').value.trim(), pw = $('#au_pw').value, name = $('#au_name').value.trim();
+    if (!id || !pw) { $('#au_msg').textContent = '아이디와 비밀번호를 입력하세요'; return; }
+    $('#au_submit').disabled = true; $('#au_msg').className = 'auth-msg'; $('#au_msg').textContent = '처리 중…';
+    var action = AUTH_MODE === 'register' ? 'registerFirstAdmin' : 'login';
+    authPost(action, { id: id, pw: pw, name: name }).then(function (d) {
+      $('#au_submit').disabled = false;
+      if (!d || !d.ok) { $('#au_msg').textContent = (d && d.error) || '실패했습니다'; return; }
+      TOKEN = d.token; USER = d.name || id;
+      try { localStorage.setItem('partner_token', TOKEN); localStorage.setItem('partner_user', USER); } catch (e) {}
+      enterApp();
+    }).catch(function (e) { $('#au_submit').disabled = false; $('#au_msg').textContent = '연결 실패: ' + e.message; });
   }
 
   /* ============ 렌더 ============ */
@@ -311,6 +365,7 @@
       });
       applyFilter();
     }).catch(function (e) {
+      if (/unauthorized/i.test(e.message)) { forceLogin('세션이 만료됐어요. 다시 로그인해 주세요.'); return; }
       $('#tbody').innerHTML = '<tr><td colspan="14" class="empty">불러오기 실패: ' + esc(e.message) + '</td></tr>';
       toast('데이터 불러오기 실패', 'err');
     });
@@ -349,6 +404,12 @@
     $('#f_marker').addEventListener('change', reapplyDefaults);
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeModal(); });
 
-    load();
+    // 인증 이벤트
+    $('#au_submit').addEventListener('click', doAuth);
+    $('#au_pw').addEventListener('keydown', function (e) { if (e.key === 'Enter') doAuth(); });
+    $('#au_id').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('#au_pw').focus(); });
+    $('#logoutBtn').addEventListener('click', function () { forceLogin(); });
+
+    startAuthGate();
   });
 })();

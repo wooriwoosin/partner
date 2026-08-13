@@ -10,11 +10,26 @@
   <link rel="stylesheet" href="assets/styles.css" />
 </head>
 <body>
-  <div class="wrap">
+  <div id="authScreen" class="auth-screen">
+    <div class="auth-card">
+      <h1 class="auth-title">협력점 관리앱</h1>
+      <div id="authSub" class="auth-sub">로그인</div>
+      <div class="auth-field"><label>아이디</label><input id="au_id" type="text" autocomplete="username" /></div>
+      <div class="auth-field"><label>비밀번호</label><input id="au_pw" type="password" autocomplete="current-password" /></div>
+      <div id="au_nameField" class="auth-field" style="display:none"><label>이름 (표시용)</label><input id="au_name" type="text" /></div>
+      <div id="au_msg" class="auth-msg"></div>
+      <button id="au_submit" class="btn primary" style="width:100%">로그인</button>
+      <div id="au_hint" class="auth-hint"></div>
+    </div>
+  </div>
+
+  <div class="wrap" id="appWrap" style="display:none">
     <header class="top">
       <h1>협력점 관리앱</h1>
       <span id="modeBadge" class="badge-mode">●</span>
       <div class="spacer"></div>
+      <span id="userName" class="badge-mode"></span>
+      <button id="logoutBtn" class="btn ghost sm">로그아웃</button>
       <button id="reloadBtn" class="btn ghost sm">새로고침</button>
       <button id="importBtn" class="btn ghost sm" style="display:none">시트에 초기데이터 넣기</button>
       <button id="addBtn" class="btn primary">+ 신규 업체</button>
