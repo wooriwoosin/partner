@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>협력점 관리앱</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%234f8cff'/%3E%3Ctext x='16' y='22' font-size='18' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='bold'%3E協%3C/text%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body>
+  <div class="wrap">
+    <header class="top">
+      <h1>협력점 관리앱</h1>
+      <span id="modeBadge" class="badge-mode">●</span>
+      <div class="spacer"></div>
+      <a id="sheetLink" class="btn ghost sm" target="_blank" rel="noopener">구글시트 열기</a>
+      <button id="reloadBtn" class="btn ghost sm">새로고침</button>
+      <button id="importBtn" class="btn ghost sm" style="display:none">시트에 초기데이터 넣기</button>
+      <button id="addBtn" class="btn primary">+ 신규 업체</button>
+    </header>
+
+    <div id="stats" class="stats"></div>
+
+    <div class="toolbar">
+      <input id="search" type="search" placeholder="업체명 · 소속 · 아이디 · 연락처 검색" />
+      <select id="fltMarker" title="전달마커">
+        <option value="">전달마커(전체)</option>
+        <option value="O">O (전달)</option>
+        <option value="X">X (미전달·직접웹)</option>
+        <option value="?">? (보류)</option>
+      </select>
+      <select id="fltWeb" title="웹활용">
+        <option value="">웹활용(전체)</option>
+        <option value="Y">웹활용 Y</option>
+        <option value="N">웹활용 N</option>
+      </select>
+      <select id="fltStatus" title="상태">
+        <option value="">상태(전체)</option>
+        <option value="활성">활성</option>
+        <option value="보류">보류(정리대상)</option>
+      </select>
+      <button id="resetBtn" class="btn ghost sm">필터 초기화</button>
+      <span id="count" class="count"></span>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>업체 / 소속(원문)</th>
+            <th>구분</th>
+            <th>마커</th>
+            <th>소통채널</th>
+            <th title="웹활용">웹</th>
+            <th title="어드민 접수 대행">접수</th>
+            <th title="유선 접수이력 전달">유선접수</th>
+            <th title="유선 개통완료 전달">유선개통</th>
+            <th title="무선 개통완료 전달(항상)">무선개통</th>
+            <th title="회신내용 전달">회신</th>
+            <th title="계정수">계정</th>
+            <th>상태</th>
+            <th>비고</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- 수정/추가 모달 -->
+  <div id="overlay" class="overlay">
+    <div class="modal">
+      <header>
+        <h3 id="modalTitle">업체</h3>
+        <button id="closeModal" class="x">×</button>
+      </header>
+      <div class="body">
+        <div class="grid2">
+          <div class="field full">
+            <label>소속 (원문) — 앞 기호로 자동판정</label>
+            <div style="display:flex; gap:8px;">
+              <input id="f_soan" placeholder="예: ★★기가몬스터●  /  ■■보라네트워크  /  0.영업정산" style="flex:1" />
+              <button id="autofillBtn" class="btn sm">자동채우기</button>
+            </div>
+            <span class="hint">■□=판매점 · ★☆=협력점 · ◆◇=인센티브협력점 · 숫자/앞●=자점</span>
+          </div>
+          <div id="preview" class="preview-box"></div>
+
+          <div class="field">
+            <label>업체명</label>
+            <input id="f_name" />
+          </div>
+          <div class="field">
+            <label>업체구분</label>
+            <select id="f_gubun">
+              <option value="">선택</option>
+              <option value="판매점">판매점</option>
+              <option value="협력점">협력점</option>
+              <option value="자점">자점</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label>전달마커 (사원명 괄호)</label>
+            <select id="f_marker">
+              <option value="">없음</option>
+              <option value="O">O — 전달</option>
+              <option value="X">X — 미전달(직접 웹처리)</option>
+              <option value="?">? — 보류</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>소통채널</label>
+            <select id="f_channel">
+              <option value="">선택</option>
+              <option value="카카오톡채널">카카오톡채널(판매점)</option>
+              <option value="카카오톡단체방">카카오톡단체방(협력점)</option>
+              <option value="어드민">어드민(자점)</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label>웹활용</label>
+            <select id="f_web"><option value="">-</option><option value="Y">Y</option><option value="N">N</option></select>
+          </div>
+          <div class="field">
+            <label>상태</label>
+            <select id="f_status"><option value="활성">활성</option><option value="보류">보류(정리대상)</option></select>
+          </div>
+
+          <div class="deliv-group">
+            <div class="gh">전달 체크리스트 (구분·마커 선택시 기본값 자동세팅 · 개별 수정 가능)</div>
+            <div class="toggles">
+              <div class="toggle"><label>접수대행</label><select id="f_접수대행"><option value="">-</option><option value="Y">Y</option><option value="N">N</option></select></div>
+              <div class="toggle"><label>유선접수전달</label><select id="f_유선접수전달"><option value="">-</option><option value="Y">Y</option><option value="N">N</option></select></div>
+              <div class="toggle"><label>유선개통전달</label><select id="f_유선개통전달"><option value="">-</option><option value="Y">Y</option><option value="N">N</option></select></div>
+              <div class="toggle"><label>무선개통전달</label><select id="f_무선개통전달"><option value="">-</option><option value="Y">Y</option><option value="N">N</option></select></div>
+              <div class="toggle"><label>회신전달</label><select id="f_회신전달"><option value="">-</option><option value="Y">Y</option><option value="N">N</option></select></div>
+            </div>
+          </div>
+
+          <div class="field">
+            <label>대표 아이디</label>
+            <input id="f_uid" />
+          </div>
+          <div class="field">
+            <label>연락처</label>
+            <input id="f_tel" />
+          </div>
+          <div class="field full">
+            <label>비고</label>
+            <textarea id="f_note" rows="2"></textarea>
+          </div>
+        </div>
+        <input type="hidden" id="f_id" />
+      </div>
+      <footer>
+        <button id="deleteBtn" class="btn danger" style="display:none">삭제</button>
+        <div class="spacer"></div>
+        <button id="cancelBtn" class="btn ghost">취소</button>
+        <button id="saveBtn" class="btn primary">저장</button>
+      </footer>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+
+  <script src="assets/config.js"></script>
+  <script src="assets/app.js"></script>
+</body>
+</html>

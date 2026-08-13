@@ -1,0 +1,147 @@
+:root {
+  --bg: #0f1420;
+  --panel: #171e2e;
+  --panel2: #1f2940;
+  --line: #2a3552;
+  --text: #e7ecf5;
+  --muted: #93a0bd;
+  --accent: #4f8cff;
+  --green: #33c37e;
+  --red: #ff5d6c;
+  --amber: #ffb020;
+  --sales: #f0883e;   /* 판매점 */
+  --partner: #4f8cff; /* 협력점 */
+  --own: #9b8cff;     /* 자점 */
+  --radius: 12px;
+  --shadow: 0 6px 20px rgba(0,0,0,.35);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: "Pretendard", -apple-system, BlinkMacSystemFont, "Segoe UI", "Malgun Gothic", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.45;
+}
+a { color: var(--accent); }
+.wrap { max-width: 1500px; margin: 0 auto; padding: 18px 20px 60px; }
+
+/* Header */
+header.top { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
+header.top h1 { font-size: 20px; margin: 0; letter-spacing: -.3px; }
+.badge-mode { font-size: 12px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+.badge-mode.live { color: var(--green); border-color: rgba(51,195,126,.4); background: rgba(51,195,126,.08); }
+.badge-mode.demo { color: var(--amber); border-color: rgba(255,176,32,.4); background: rgba(255,176,32,.08); }
+header.top .spacer { flex: 1; }
+.btn {
+  border: 1px solid var(--line); background: var(--panel2); color: var(--text);
+  padding: 8px 14px; border-radius: 9px; cursor: pointer; font-size: 13px; font-weight: 600;
+  transition: .12s; white-space: nowrap;
+}
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn.ghost { background: transparent; }
+.btn.danger { background: transparent; border-color: rgba(255,93,108,.5); color: var(--red); }
+.btn.danger:hover { background: rgba(255,93,108,.12); }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.btn.sm { padding: 5px 10px; font-size: 12px; }
+
+/* Stat cards */
+.stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 16px; }
+.stat { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; cursor: pointer; transition: .12s; }
+.stat:hover { border-color: var(--accent); }
+.stat.active { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.stat .n { font-size: 26px; font-weight: 800; letter-spacing: -.5px; }
+.stat .l { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.stat.sales .n { color: var(--sales); }
+.stat.partner .n { color: var(--partner); }
+.stat.own .n { color: var(--own); }
+.stat.hold .n { color: var(--amber); }
+
+/* Toolbar */
+.toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+.toolbar input[type=search], .toolbar select {
+  background: var(--panel); border: 1px solid var(--line); color: var(--text);
+  padding: 8px 11px; border-radius: 9px; font-size: 13px; outline: none;
+}
+.toolbar input[type=search] { min-width: 240px; }
+.toolbar input[type=search]:focus, .toolbar select:focus { border-color: var(--accent); }
+.toolbar .count { color: var(--muted); font-size: 12px; margin-left: auto; }
+
+/* Table */
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); }
+table { border-collapse: collapse; width: 100%; min-width: 1100px; font-size: 13px; }
+thead th {
+  position: sticky; top: 0; background: var(--panel2); color: var(--muted);
+  text-align: left; padding: 10px 10px; font-weight: 600; border-bottom: 1px solid var(--line);
+  white-space: nowrap; font-size: 12px;
+}
+tbody td { padding: 9px 10px; border-bottom: 1px solid rgba(42,53,82,.5); vertical-align: middle; white-space: nowrap; }
+tbody tr:hover { background: rgba(79,140,255,.06); }
+.name-cell { font-weight: 700; }
+.name-cell .raw { display: block; font-weight: 400; color: var(--muted); font-size: 11px; }
+
+/* Chips */
+.chip { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+.chip.g-판매점 { background: rgba(240,136,62,.15); color: var(--sales); }
+.chip.g-협력점 { background: rgba(79,140,255,.15); color: var(--partner); }
+.chip.g-자점 { background: rgba(155,140,255,.15); color: var(--own); }
+.chip.m-O { background: rgba(51,195,126,.16); color: var(--green); }
+.chip.m-X { background: rgba(255,93,108,.16); color: var(--red); }
+.chip.m-\? { background: rgba(255,176,32,.16); color: var(--amber); }
+.chip.status-활성 { background: rgba(51,195,126,.14); color: var(--green); }
+.chip.status-보류 { background: rgba(255,176,32,.14); color: var(--amber); }
+.chip.inc { background: rgba(155,140,255,.16); color: var(--own); }
+
+/* delivery cells */
+.yn { font-weight: 800; }
+.yn.y { color: var(--green); }
+.yn.n { color: #5a6684; }
+.yn.blank { color: #46506b; }
+
+/* Modal */
+.overlay { position: fixed; inset: 0; background: rgba(6,9,16,.66); display: none; align-items: flex-start; justify-content: center; padding: 40px 16px; z-index: 50; overflow-y: auto; }
+.overlay.open { display: flex; }
+.modal { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; width: 100%; max-width: 680px; box-shadow: var(--shadow); }
+.modal header { display: flex; align-items: center; padding: 16px 18px; border-bottom: 1px solid var(--line); }
+.modal header h3 { margin: 0; font-size: 16px; }
+.modal header .x { margin-left: auto; cursor: pointer; color: var(--muted); font-size: 20px; background: none; border: none; }
+.modal .body { padding: 18px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; }
+.field { display: flex; flex-direction: column; gap: 5px; }
+.field.full { grid-column: 1 / -1; }
+.field label { font-size: 12px; color: var(--muted); font-weight: 600; }
+.field input, .field select, .field textarea {
+  background: var(--panel2); border: 1px solid var(--line); color: var(--text);
+  padding: 8px 10px; border-radius: 8px; font-size: 13px; outline: none; font-family: inherit;
+}
+.field input:focus, .field select:focus, .field textarea:focus { border-color: var(--accent); }
+.field .hint { font-size: 11px; color: var(--muted); }
+.deliv-group { grid-column: 1/-1; border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-top: 4px; }
+.deliv-group .gh { font-size: 12px; color: var(--muted); margin-bottom: 10px; font-weight: 700; }
+.toggles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.toggle { display: flex; align-items: center; justify-content: space-between; gap: 8px; background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; }
+.toggle label { font-size: 12px; }
+.toggle select { background: var(--panel); border: 1px solid var(--line); color: var(--text); border-radius: 6px; padding: 3px 6px; font-size: 12px; }
+.modal footer { display: flex; gap: 10px; padding: 14px 18px; border-top: 1px solid var(--line); }
+.modal footer .spacer { flex: 1; }
+.preview-box { background: var(--panel2); border: 1px dashed var(--line); border-radius: 8px; padding: 10px 12px; font-size: 12px; color: var(--muted); grid-column: 1/-1; }
+.preview-box b { color: var(--text); }
+
+/* toast */
+#toast { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--panel2); border: 1px solid var(--line); padding: 11px 18px; border-radius: 10px; box-shadow: var(--shadow); opacity: 0; transition: .2s; z-index: 100; font-size: 13px; }
+#toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+#toast.err { border-color: var(--red); color: var(--red); }
+#toast.ok { border-color: var(--green); }
+
+.empty { text-align: center; color: var(--muted); padding: 40px; }
+.spin { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: sp .7s linear infinite; vertical-align: -2px; }
+@keyframes sp { to { transform: rotate(360deg); } }
+
+@media (max-width: 720px) {
+  .stats { grid-template-columns: repeat(2, 1fr); }
+  .toggles { grid-template-columns: repeat(2, 1fr); }
+  .grid2 { grid-template-columns: 1fr; }
+}
