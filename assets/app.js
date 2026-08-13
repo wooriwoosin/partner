@@ -160,9 +160,7 @@
   function startAuthGate() {
     if (!LIVE) { enterApp(); return; }          // 데모 모드: 인증 없음
     if (TOKEN) { enterApp(); return; }           // 토큰 있으면 시도(무효면 load에서 처리)
-    authPost('hasUsers', {}).then(function (d) {
-      showAuth(d && d.hasUsers ? 'login' : 'register');
-    }).catch(function () { showAuth('login'); });
+    showAuth('login');                           // 항상 로그인 화면(초기 관리자는 서버가 자동 생성)
   }
   function doAuth() {
     var id = $('#au_id').value.trim(), pw = $('#au_pw').value, name = $('#au_name').value.trim();
@@ -171,7 +169,11 @@
     var action = AUTH_MODE === 'register' ? 'registerFirstAdmin' : 'login';
     authPost(action, { id: id, pw: pw, name: name }).then(function (d) {
       $('#au_submit').disabled = false;
-      if (!d || !d.ok) { $('#au_msg').textContent = (d && d.error) || '실패했습니다'; return; }
+      if (!d || !d.ok) {
+        var em = (d && d.error) || '실패했습니다';
+        if (/unknown action/i.test(em)) em = '서버(Apps Script) 배포가 최신 코드가 아니에요. 새 코드로 다시 배포해 주세요.';
+        $('#au_msg').textContent = em; return;
+      }
       TOKEN = d.token; USER = d.name || id;
       try { localStorage.setItem('partner_token', TOKEN); localStorage.setItem('partner_user', USER); localStorage.setItem('partner_user_id', id); } catch (e) {}
       enterApp();
