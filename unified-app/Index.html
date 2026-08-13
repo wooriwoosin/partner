@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>업체 통합 마스터</title>
+<style>
+  :root {
+    --bg:#f4f6f9; --card:#fff; --line:#e3e7ee; --text:#1d2733; --sub:#6b7684;
+    --accent:#2563eb; --accent-soft:#eaf1fe; --danger:#dc2626; --ok:#16a34a;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:'Pretendard','Apple SD Gothic Neo','Malgun Gothic',sans-serif; background:var(--bg); color:var(--text); font-size:14px; }
+  header { background:#fff; border-bottom:1px solid var(--line); padding:14px 20px; display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+  header h1 { font-size:18px; }
+  header .sub { color:var(--sub); font-size:12px; }
+  .wrap { max-width:1280px; margin:0 auto; padding:16px 20px 60px; }
+
+  .stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:10px; margin-bottom:16px; }
+  .stat { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:12px 14px; }
+  .stat .num { font-size:20px; font-weight:700; }
+  .stat .lbl { font-size:12px; color:var(--sub); margin-top:2px; }
+
+  .tabs { display:flex; gap:6px; margin-bottom:12px; flex-wrap:wrap; }
+  .tab { padding:8px 16px; border-radius:8px; border:1px solid var(--line); background:#fff; cursor:pointer; font-size:14px; }
+  .tab.on { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600; }
+
+  .toolbar { display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap; align-items:center; }
+  .toolbar input[type=text] { flex:1; min-width:180px; padding:9px 12px; border:1px solid var(--line); border-radius:8px; font-size:14px; }
+  .toolbar select { padding:9px 10px; border:1px solid var(--line); border-radius:8px; background:#fff; font-size:13px; }
+  .btn { padding:9px 14px; border-radius:8px; border:1px solid var(--accent); background:var(--accent); color:#fff; cursor:pointer; font-size:14px; font-weight:600; }
+  .btn.ghost { background:#fff; color:var(--accent); }
+  .btn.danger { background:#fff; border-color:var(--danger); color:var(--danger); }
+
+  .tbl-wrap { background:var(--card); border:1px solid var(--line); border-radius:10px; overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; min-width:760px; }
+  th, td { padding:9px 10px; border-bottom:1px solid var(--line); text-align:left; white-space:nowrap; }
+  th { background:#f8fafc; font-size:12px; color:var(--sub); position:sticky; top:0; }
+  tbody tr { cursor:pointer; }
+  tbody tr:hover { background:var(--accent-soft); }
+  td.note { max-width:260px; overflow:hidden; text-overflow:ellipsis; }
+  .pill { display:inline-block; padding:2px 8px; border-radius:20px; font-size:12px; background:#eef2f7; }
+  .pill.판매점 { background:#e8f5ee; color:#15803d; }
+  .pill.협력점 { background:#eef2ff; color:#4338ca; }
+  .pill.자점 { background:#fef3e2; color:#b45309; }
+  .pill.기타 { background:#f3f4f6; color:#374151; }
+  .pill.정발행 { background:#e0f2fe; color:#0369a1; }
+  .pill.역발행 { background:#fce7f3; color:#be185d; }
+  .pill.원천세 { background:#fef9c3; color:#a16207; }
+  .yn-Y { color:var(--ok); font-weight:700; }
+  .yn-N { color:#cbd5e1; }
+  .muted { color:var(--sub); }
+  #count { color:var(--sub); font-size:13px; }
+
+  /* 모달 */
+  .overlay { position:fixed; inset:0; background:rgba(15,23,42,.45); display:none; align-items:flex-start; justify-content:center; padding:30px 12px; overflow:auto; z-index:50; }
+  .overlay.show { display:flex; }
+  .modal { background:#fff; border-radius:14px; width:100%; max-width:720px; padding:22px; }
+  .modal h2 { font-size:17px; margin-bottom:14px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:10px 14px; }
+  .field label { display:block; font-size:12px; color:var(--sub); margin-bottom:3px; }
+  .field input, .field select, .field textarea { width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:8px; font-size:14px; font-family:inherit; }
+  .field.full { grid-column:1 / -1; }
+  .sect { grid-column:1 / -1; font-size:13px; font-weight:700; color:var(--accent); border-bottom:1px solid var(--line); padding-bottom:4px; margin-top:6px; }
+  .modal .actions { display:flex; gap:8px; justify-content:flex-end; margin-top:18px; }
+  #loading { position:fixed; inset:0; background:rgba(255,255,255,.7); display:flex; align-items:center; justify-content:center; font-weight:700; z-index:99; }
+  .toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:#1d2733; color:#fff; padding:10px 18px; border-radius:8px; font-size:13px; opacity:0; transition:opacity .3s; z-index:100; }
+  .toast.show { opacity:1; }
+</style>
+</head>
+<body>
+<header>
+  <h1>📇 업체 통합 마스터</h1>
+  <span class="sub">협력점관리 · 계산서방식 · 전자계약서 통합</span>
+  <span style="flex:1"></span>
+  <button class="btn" onclick="openModal(null)">+ 신규 업체</button>
+</header>
+
+<div class="wrap">
+  <div class="stats" id="stats"></div>
+
+  <div class="tabs">
+    <button class="tab on" data-tab="all" onclick="setTab('all')">전체</button>
+    <button class="tab" data-tab="invoice" onclick="setTab('invoice')">🧾 계산서</button>
+    <button class="tab" data-tab="contract" onclick="setTab('contract')">📝 계약서</button>
+  </div>
+
+  <div class="toolbar">
+    <input type="text" id="q" placeholder="업체명 / 대표자 / 연락처 / 아이디 검색" oninput="render()">
+    <select id="fGroup" onchange="render()">
+      <option value="">구분 전체</option>
+      <option>자점</option><option>판매점</option><option>협력점</option><option>기타</option>
+    </select>
+    <select id="fCorp" onchange="render()">
+      <option value="">법인 전체</option>
+      <option>웨이브넷</option><option>우성</option><option>우신</option>
+    </select>
+    <select id="fInv" onchange="render()">
+      <option value="">계산서 전체</option>
+      <option>정발행</option><option>역발행</option><option>원천세</option><option>기타</option>
+    </select>
+    <select id="fState" onchange="render()">
+      <option value="활성">활성만</option>
+      <option value="">상태 전체</option>
+      <option value="삭제">삭제만</option>
+    </select>
+    <span id="count"></span>
+  </div>
+
+  <div class="tbl-wrap">
+    <table>
+      <thead id="thead"></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- 수정/신규 모달 -->
+<div class="overlay" id="overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <h2 id="mTitle">업체 수정</h2>
+    <div class="grid" id="mGrid"></div>
+    <div class="actions">
+      <button class="btn danger" id="mDelete" onclick="doDelete()">삭제</button>
+      <span style="flex:1"></span>
+      <button class="btn ghost" onclick="closeModal()">취소</button>
+      <button class="btn" onclick="doSave()">저장</button>
+    </div>
+  </div>
+</div>
+
+<div id="loading">불러오는 중…</div>
+<div class="toast" id="toast"></div>
+
+<script>
+var ROWS = [];
+var TAB = 'all';
+var CURRENT = null;
+
+var YN = ['','Y','N'];
+var FIELDS = [
+  {sect:'기본 정보'},
+  {k:'업체명', req:true},
+  {k:'기호'},
+  {k:'업체구분', opts:['','자점','판매점','협력점','기타']},
+  {k:'법인', opts:['','웨이브넷','우성','우신']},
+  {k:'상태', opts:['활성','삭제','중지']},
+  {k:'대표자'}, {k:'연락처'},
+  {k:'소통채널', opts:['','어드민','카카오톡채널','카톡','메일','기타']},
+  {k:'대표아이디'}, {k:'계정수'},
+  {sect:'업무 전달'},
+  {k:'웹활용', opts:YN}, {k:'직접접수', opts:YN}, {k:'접수대행', opts:YN},
+  {k:'유선접수전달', opts:YN}, {k:'유선개통전달', opts:YN}, {k:'무선개통전달', opts:YN},
+  {k:'회신전달', opts:YN}, {k:'인센티브', opts:YN}, {k:'전달마커'},
+  {sect:'계산서'},
+  {k:'계산서형태', opts:['','정발행','역발행','원천세','기타']},
+  {k:'수신방법'},
+  {k:'계산서비고', full:true, area:true},
+  {sect:'전자계약'},
+  {k:'계약서1', opts:YN}, {k:'계약서2', opts:YN},
+  {k:'사업자등록증', opts:YN}, {k:'계약제외', opts:YN},
+  {k:'계약비고', full:true, area:true},
+  {sect:'기타'},
+  {k:'비고', full:true, area:true}
+];
+
+var TABCOLS = {
+  all:      ['기호','업체명','업체구분','법인','대표자','연락처','소통채널','계산서형태','계약서1','비고'],
+  invoice:  ['기호','업체명','법인','계산서형태','수신방법','계산서비고'],
+  contract: ['기호','업체명','대표자','연락처','계약서1','계약서2','사업자등록증','계약제외','계약비고']
+};
+var LABELS = {'계약서1':'계약①','계약서2':'계약②','사업자등록증':'사업자','계약제외':'제외'};
+
+function load() {
+  document.getElementById('loading').style.display = 'flex';
+  google.script.run
+    .withSuccessHandler(function (res) {
+      ROWS = res.rows;
+      document.getElementById('loading').style.display = 'none';
+      render();
+    })
+    .withFailureHandler(function (err) {
+      document.getElementById('loading').style.display = 'none';
+      alert(err.message || err);
+    })
+    .apiList();
+}
+
+function setTab(t) {
+  TAB = t;
+  document.querySelectorAll('.tab').forEach(function (b) {
+    b.classList.toggle('on', b.dataset.tab === t);
+  });
+  render();
+}
+
+function filtered() {
+  var q = document.getElementById('q').value.trim().toLowerCase();
+  var g = document.getElementById('fGroup').value;
+  var c = document.getElementById('fCorp').value;
+  var iv = document.getElementById('fInv').value;
+  var st = document.getElementById('fState').value;
+  return ROWS.filter(function (r) {
+    if (st && String(r['상태']) !== st) return false;
+    if (g && String(r['업체구분']) !== g) return false;
+    if (c && String(r['법인']) !== c) return false;
+    if (iv && String(r['계산서형태']) !== iv) return false;
+    if (TAB === 'invoice' && !r['계산서형태']) return false;
+    if (TAB === 'contract' && r['계약서1'] === '' && r['계약서2'] === '') return false;
+    if (q) {
+      var hay = [r['업체명'], r['대표자'], r['연락처'], r['대표아이디'], r['비고'], r['계산서비고'], r['계약비고']]
+        .join(' ').toLowerCase();
+      if (hay.indexOf(q) < 0) return false;
+    }
+    return true;
+  });
+}
+
+function cellHtml(col, v) {
+  v = v === undefined || v === null ? '' : String(v);
+  if (col === '업체구분' && v) return '<span class="pill ' + v + '">' + v + '</span>';
+  if (col === '계산서형태' && v) return '<span class="pill ' + v + '">' + v + '</span>';
+  if (['계약서1','계약서2','사업자등록증','계약제외','웹활용'].indexOf(col) >= 0) {
+    if (v === 'Y') return '<span class="yn-Y">Y</span>';
+    if (v === 'N') return '<span class="yn-N">N</span>';
+    return '<span class="muted">-</span>';
+  }
+  return esc(v);
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function render() {
+  var cols = TABCOLS[TAB];
+  var rows = filtered();
+  document.getElementById('thead').innerHTML =
+    '<tr>' + cols.map(function (c) { return '<th>' + (LABELS[c] || c) + '</th>'; }).join('') + '</tr>';
+  document.getElementById('tbody').innerHTML = rows.map(function (r) {
+    return '<tr onclick="openModal(' + r['id'] + ')">' + cols.map(function (c) {
+      var cls = (c.indexOf('비고') >= 0) ? ' class="note" title="' + esc(r[c] || '') + '"' : '';
+      return '<td' + cls + '>' + cellHtml(c, r[c]) + '</td>';
+    }).join('') + '</tr>';
+  }).join('');
+  document.getElementById('count').textContent = rows.length + '개 표시';
+  renderStats();
+}
+
+function renderStats() {
+  var act = ROWS.filter(function (r) { return r['상태'] !== '삭제'; });
+  function cnt(f) { return act.filter(f).length; }
+  var items = [
+    ['총 업체', act.length],
+    ['판매점', cnt(function (r) { return r['업체구분'] === '판매점'; })],
+    ['협력점', cnt(function (r) { return r['업체구분'] === '협력점'; })],
+    ['자점', cnt(function (r) { return r['업체구분'] === '자점'; })],
+    ['정발행', cnt(function (r) { return r['계산서형태'] === '정발행'; })],
+    ['역발행', cnt(function (r) { return r['계산서형태'] === '역발행'; })],
+    ['원천세', cnt(function (r) { return r['계산서형태'] === '원천세'; })],
+    ['계약 완료', cnt(function (r) { return r['계약서1'] === 'Y' && r['계약서2'] === 'Y'; })]
+  ];
+  document.getElementById('stats').innerHTML = items.map(function (it) {
+    return '<div class="stat"><div class="num">' + it[1] + '</div><div class="lbl">' + it[0] + '</div></div>';
+  }).join('');
+}
+
+// ─────────── 모달 ───────────
+function openModal(id) {
+  CURRENT = id ? ROWS.find(function (r) { return String(r['id']) === String(id); }) : null;
+  document.getElementById('mTitle').textContent = CURRENT ? '업체 수정 — ' + CURRENT['업체명'] : '신규 업체 등록';
+  document.getElementById('mDelete').style.display = CURRENT ? '' : 'none';
+  var html = FIELDS.map(function (f) {
+    if (f.sect) return '<div class="sect">' + f.sect + '</div>';
+    var v = CURRENT ? (CURRENT[f.k] === undefined ? '' : String(CURRENT[f.k])) : '';
+    var cls = 'field' + (f.full ? ' full' : '');
+    var input;
+    if (f.opts) {
+      input = '<select id="f_' + f.k + '">' + f.opts.map(function (o) {
+        return '<option value="' + o + '"' + (String(v) === o ? ' selected' : '') + '>' + (o || '-') + '</option>';
+      }).join('') + '</select>';
+      if (f.opts.indexOf(v) < 0 && v !== '') {
+        input = input.replace('</select>', '<option selected value="' + esc(v) + '">' + esc(v) + '</option></select>');
+      }
+    } else if (f.area) {
+      input = '<textarea id="f_' + f.k + '" rows="2">' + esc(v) + '</textarea>';
+    } else {
+      input = '<input id="f_' + f.k + '" value="' + esc(v).replace(/"/g,'&quot;') + '">';
+    }
+    return '<div class="' + cls + '"><label>' + f.k + (f.req ? ' *' : '') + '</label>' + input + '</div>';
+  }).join('');
+  document.getElementById('mGrid').innerHTML = html;
+  document.getElementById('overlay').classList.add('show');
+}
+
+function closeModal() {
+  document.getElementById('overlay').classList.remove('show');
+}
+
+function doSave() {
+  var rec = CURRENT ? { id: CURRENT['id'] } : {};
+  FIELDS.forEach(function (f) {
+    if (f.sect) return;
+    rec[f.k] = document.getElementById('f_' + f.k).value;
+  });
+  if (!rec['업체명']) { alert('업체명은 필수입니다.'); return; }
+  document.getElementById('loading').style.display = 'flex';
+  google.script.run
+    .withSuccessHandler(function () { closeModal(); toast('저장되었습니다'); load(); })
+    .withFailureHandler(function (e) {
+      document.getElementById('loading').style.display = 'none';
+      alert(e.message || e);
+    })
+    .apiSave(rec);
+}
+
+function doDelete() {
+  if (!CURRENT) return;
+  if (!confirm('"' + CURRENT['업체명'] + '" 업체를 삭제 상태로 변경할까요?\n(행이 지워지지는 않고 상태만 "삭제"로 바뀝니다)')) return;
+  document.getElementById('loading').style.display = 'flex';
+  google.script.run
+    .withSuccessHandler(function () { closeModal(); toast('삭제 처리되었습니다'); load(); })
+    .withFailureHandler(function (e) {
+      document.getElementById('loading').style.display = 'none';
+      alert(e.message || e);
+    })
+    .apiDelete(CURRENT['id']);
+}
+
+function toast(msg) {
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(function () { t.classList.remove('show'); }, 2000);
+}
+
+load();
+</script>
+</body>
+</html>
