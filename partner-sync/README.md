@@ -20,20 +20,21 @@ navergg.kr 어드민에 로그인 → **고객관리 › 전체고객관리**의
 - **지난주**: 오늘 기준 지난주 월~일 자동 계산 (예: 8/13 실행 → 8/3~8/9)
 - **협력점 컬럼**으로 업체 판정, 기존 업체(시트)와 대조
 
-## 설치 (최초 1회)
-필요: **Node.js 18+** (https://nodejs.org)
+## 실행 방법 A — 윈도우 더블클릭 (추천, 명령어 필요 없음)
+1. **Node.js** 설치(딱 한 번): https://nodejs.org/ko/download → Windows Installer → 다음-다음
+2. 이 폴더의 **`START.bat` 더블클릭**
+3. 잠시 후 브라우저에 입력창이 자동으로 열립니다 (첫 실행은 설치로 3~5분)
+> 자세한 그림 설명은 같은 폴더 `사용법-윈도우.txt` 참고.
 
+## 실행 방법 B — 터미널 (개발자용)
 ```bash
 cd partner-sync
-npm install            # playwright + 크로미움
-cp config.example.json config.json
+npm install
+cp config.example.json config.json   # API_URL(Apps Script URL) 채우기
+npm start                            # → http://localhost:4180
 ```
-`config.json` 에서 `API_URL`(Apps Script 웹앱 URL)만 채우면 됩니다. `BASE_URL`/`LOGIN_URL` 은 navergg 기본값.
 
-## 실행
-```bash
-npm start        # → http://localhost:4180
-```
+## 사용 (브라우저 입력창)
 1. 아이디 / 비밀번호 입력
 2. **휴대폰 SMS 인증 필요** 체크박스 — OTP 없이 로그인되는 계정(사장님)은 **해제**
    - 체크 시: 휴대폰 중간·끝자리 입력 → 실행하면 문자 발송 → **열린 브라우저 창의 [인증번호]에 4자리 입력**하면 자동 진행
