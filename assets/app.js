@@ -323,7 +323,6 @@
     if (LIVE) { badge.textContent = '● 라이브(구글시트 연동)'; badge.className = 'badge-mode live'; }
     else { badge.textContent = '● 데모(읽기전용 · seed.json)'; badge.className = 'badge-mode demo'; }
     $('#importBtn').style.display = LIVE ? 'inline-block' : 'none';
-    $('#sheetLink').href = CFG.SHEET_URL || '#';
 
     // 툴바 이벤트
     $('#search').addEventListener('input', function () { STATE.filter.q = this.value; applyFilter(); });
