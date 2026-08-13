@@ -8,7 +8,7 @@
   var SALES_SYMS = ['■■', '□□', '■', '□'];
   var PARTNER_SYMS = ['★★', '☆☆', '◆◆', '◇◇', '★', '☆', '◆', '◇'];
   var INCENTIVE_SYMS = ['◆◆', '◇◇', '◆', '◇'];
-  var ALL_SYMS = '■□★☆◆◇●';
+  var ALL_SYMS = '■□★☆◆◇●○◎';
 
   function leadSymbol(soan) {
     var s = soan || '';

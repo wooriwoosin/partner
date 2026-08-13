@@ -10,7 +10,7 @@
 const SALES_SYMS = ['■■', '□□', '■', '□'];
 const PARTNER_SYMS = ['★★', '☆☆', '◆◆', '◇◇', '★', '☆', '◆', '◇'];
 const INCENTIVE_SYMS = ['◆◆', '◇◇', '◆', '◇'];
-const ALL_SYMS = '■□★☆◆◇●';
+const ALL_SYMS = '■□★☆◆◇●○◎';
 
 function leadSymbol(soan) {
   const s = soan || '';

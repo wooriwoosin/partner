@@ -2,29 +2,17 @@
   "API_URL": "여기에_Apps_Script_웹앱_URL",
   "WRITE_TOKEN": "",
 
-  "LOGIN_URL": "https://navergg.kr/login",
-  "CUSTOMER_LIST_URL": "",
+  "BASE_URL": "https://navergg.kr",
+  "LOGIN_URL": "https://navergg.kr/",
 
   "headless": false,
   "chromePath": "",
 
-  "_설명": "selectors 와 excelColumns 는 실제 페이지 소스/샘플엑셀을 받은 뒤 확정합니다. 비워두면 임시 기본값 사용.",
-  "selectors": {
-    "idInput": "",
-    "pwInput": "",
-    "idVerifyButton": "아이디인증",
-    "otpInput": "",
-    "loginButton": "로그인",
-    "dateTypeSelect": "",
-    "dateTypeValue": "개통일",
-    "periodLastWeek": "지난주",
-    "searchButton": "조회",
-    "excelButton": "엑셀"
-  },
+  "_설명": "로그인/개통엑셀 경로는 실제 페이지 소스 기준으로 확정됨. BASE_URL/LOGIN_URL 만 맞으면 됨. excelColumns 는 헤더명이 다를 때만 지정.",
   "excelColumns": {
-    "소속": ["소속"],
-    "사원명": ["사원명", "고객명"],
-    "아이디": ["아이디"],
-    "연락처": ["연락처"]
+    "소속": ["협력점"],
+    "고객명": ["고객명"],
+    "개통일": ["개통일"],
+    "유치자": ["유치자"]
   }
 }

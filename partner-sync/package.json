@@ -8,7 +8,6 @@
     "postinstall": "playwright install chromium"
   },
   "dependencies": {
-    "playwright": "^1.47.0",
-    "xlsx": "^0.18.5"
+    "playwright": "^1.47.0"
   }
 }

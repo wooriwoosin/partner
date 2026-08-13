@@ -32,7 +32,7 @@ OUT_DIR = sys.argv[2] if len(sys.argv) > 2 else os.path.join(os.path.dirname(__f
 SALES_SYMS   = ["■■", "□□", "■", "□"]                 # 판매점 (긴 것 먼저)
 PARTNER_SYMS = ["★★", "☆☆", "◆◆", "◇◇", "★", "☆", "◆", "◇"]  # 협력점
 INCENTIVE_SYMS = ["◆◆", "◇◇", "◆", "◇"]              # 인센티브 협력점
-ALL_SYMS = "■□★☆◆◇●"
+ALL_SYMS = "■□★☆◆◇●○◎"
 
 
 def clean(s):

@@ -36,7 +36,11 @@ const server = http.createServer(async (req, res) => {
       const send = (obj) => res.write(JSON.stringify(obj) + '\n');
       try {
         const config = loadConfig();
-        const creds = { id: payload.id, pw: payload.pw, useOtp: !!payload.useOtp, otp: payload.otp };
+        const creds = {
+          id: payload.id, pw: payload.pw, useOtp: !!payload.useOtp,
+          phoneMid: payload.phoneMid, phoneLast: payload.phoneLast, otp: payload.otp,
+          dateStart: payload.dateStart, dateEnd: payload.dateEnd,
+        };
         if (!creds.id || !creds.pw) throw new Error('아이디/비밀번호를 입력하세요.');
         const result = await runSync({
           config, creds, dryRun: !!payload.dryRun,

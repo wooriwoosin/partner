@@ -47,10 +47,14 @@
 
       <div class="otp-toggle">
         <input id="useOtp" type="checkbox" />
-        <label for="useOtp" style="margin:0">휴대폰 인증번호 사용 (안 눌러도 로그인되면 체크 해제)</label>
+        <label for="useOtp" style="margin:0">휴대폰 SMS 인증 필요 (안 눌러도 로그인되는 계정은 체크 해제)</label>
       </div>
       <div id="otpBox" class="otp-box">
-        <label>휴대폰 인증번호</label><input id="otp" type="text" autocomplete="off" />
+        <div class="row">
+          <div><label>휴대폰 중간자리</label><input id="phoneMid" type="text" maxlength="4" placeholder="예: 1234" autocomplete="off" /></div>
+          <div><label>휴대폰 끝자리</label><input id="phoneLast" type="text" maxlength="4" placeholder="예: 5678" autocomplete="off" /></div>
+        </div>
+        <div style="font-size:12px;color:var(--amber);margin-top:6px">체크 시: 실행하면 인증문자가 발송됩니다. <b>열리는 브라우저 창의 [인증번호] 칸에 4자리를 입력</b>하면 자동으로 로그인이 이어집니다.</div>
       </div>
 
       <div class="btns">
@@ -83,7 +87,7 @@
       $('#newsWrap').innerHTML=''; $('#changesWrap').innerHTML='';
       $('#runBtn').disabled=true; $('#previewBtn').disabled=true;
       setStatus(dryRun?'미리보기 중…':'동기화 중…','');
-      var payload={ id:$('#id').value.trim(), pw:$('#pw').value, useOtp:$('#useOtp').checked, otp:$('#otp').value.trim(), dryRun:dryRun };
+      var payload={ id:$('#id').value.trim(), pw:$('#pw').value, useOtp:$('#useOtp').checked, phoneMid:$('#phoneMid').value.trim(), phoneLast:$('#phoneLast').value.trim(), dryRun:dryRun };
       try{
         var resp=await fetch('/sync',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
         var reader=resp.body.getReader(); var dec=new TextDecoder(); var buf='';
