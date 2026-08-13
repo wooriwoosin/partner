@@ -17,6 +17,9 @@ var USER_SHEET = '사용자';
 // 서명/해시용 비밀키. 그냥 두셔도 되고, 바꾸면 기존 토큰·비번해시가 무효화됩니다.
 var SECRET = 'wnet-2026-8f3a9c1e-partner-secret';
 
+// 초기 관리자 (비밀번호는 해시로만 보관 · 사용자 0명일 때 자동 생성)
+var BOOTSTRAP_ADMIN = { 아이디: 'kmj', 해시: 'uEHJRXREBKPZumiEQLC2XVoaAJBR0F_beTg8hG5ElhE=', 이름: '김민정', 권한: 'admin' };
+
 var HEADERS = [
   'id', '소속원문', '업체명', '기호', '업체구분', '인센티브', '전달마커',
   '소통채널', '웹활용', '직접접수', '접수대행', '유선접수전달', '유선개통전달',
@@ -92,6 +95,36 @@ function addUser_(id, pw, name, role) {
   var sh = userSheet_();
   sh.appendRow([String(id).trim(), hashPw_(String(id).trim(), pw), name || '', role || 'admin', '활성', new Date()]);
 }
+function addUserHash_(id, hash, name, role) {
+  userSheet_().appendRow([String(id).trim(), hash, name || '', role || 'admin', '활성', new Date()]);
+}
+function ensureAdmin_() {
+  var sh = userSheet_();
+  if (sh.getLastRow() < 2 && BOOTSTRAP_ADMIN && BOOTSTRAP_ADMIN.해시) {
+    addUserHash_(BOOTSTRAP_ADMIN.아이디, BOOTSTRAP_ADMIN.해시, BOOTSTRAP_ADMIN.이름, BOOTSTRAP_ADMIN.권한);
+  }
+}
+function usersPublic_() {
+  return readUsers_().map(function (u) { return { 아이디: u.아이디, 이름: u.이름, 권한: u.권한, 상태: u.상태 }; });
+}
+function createUser_(id, pw, name, role) {
+  id = String(id || '').trim();
+  if (id.length < 3) return { ok: false, error: '아이디는 3자 이상이어야 합니다.' };
+  if (String(pw || '').length < 4) return { ok: false, error: '비밀번호는 4자 이상이어야 합니다.' };
+  if (findUser_(id)) return { ok: false, error: '이미 있는 아이디입니다.' };
+  addUser_(id, pw, name || id, role || 'staff');
+  return { ok: true };
+}
+function deleteUser_(id) {
+  id = String(id || '').trim();
+  var sh = userSheet_(); var last = sh.getLastRow();
+  if (last < 3) return { ok: false, error: '마지막 계정은 삭제할 수 없습니다.' };
+  var v = sh.getRange(2, 1, last - 1, 1).getValues();
+  for (var i = 0; i < v.length; i++) {
+    if (String(v[i][0]).trim() === id) { sh.deleteRow(i + 2); return { ok: true, deleted: id }; }
+  }
+  return { ok: false, error: '없는 아이디입니다.' };
+}
 
 function login_(id, pw) {
   var u = findUser_(id);
@@ -138,6 +171,7 @@ function nextId_(rows) {
 function doGet(e) {
   e = e || {}; var p = e.parameter || {}; var cb = p.callback;
   try {
+    ensureAdmin_();
     var action = p.action || 'ping';
     if (action === 'ping') return json_({ ok: true, sheet: SHEET_NAME, hasUsers: readUsers_().length > 0 }, cb);
     if (action === 'hasUsers') return json_({ ok: true, hasUsers: readUsers_().length > 0 }, cb);
@@ -152,6 +186,7 @@ function doPost(e) {
   catch (err) { return json_({ ok: false, error: 'bad json' }); }
   var action = body.action || '';
   try {
+    ensureAdmin_();
     if (action === 'hasUsers') return json_({ ok: true, hasUsers: readUsers_().length > 0 });
     if (action === 'login') return json_(login_(body.id, body.pw));
     if (action === 'registerFirstAdmin') return json_(registerFirstAdmin_(body.id, body.pw, body.name));
@@ -161,6 +196,9 @@ function doPost(e) {
     if (action === 'upsert') { requireAuth_(body.token); return json_(upsert_(body.company)); }
     if (action === 'delete') { requireAuth_(body.token); return json_(remove_(body.id)); }
     if (action === 'bulkImport') { requireAuth_(body.token); return json_(bulkImport_(body.companies, body.replace)); }
+    if (action === 'listUsers') { requireAuth_(body.token); return json_({ ok: true, users: usersPublic_() }); }
+    if (action === 'createUser') { requireAuth_(body.token); return json_(createUser_(body.id, body.pw, body.name, body.role)); }
+    if (action === 'deleteUser') { requireAuth_(body.token); return json_(deleteUser_(body.id)); }
     return json_({ ok: false, error: 'unknown action: ' + action });
   } catch (err) { return json_({ ok: false, error: String(err && err.message || err) }); }
 }

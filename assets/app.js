@@ -112,7 +112,44 @@
     $('#appWrap').style.display = '';
     $('#userName').textContent = USER ? ('● ' + USER) : '';
     $('#userName').className = 'badge-mode live';
+    $('#usersBtn').style.display = LIVE ? 'inline-block' : 'none';
     load();
+  }
+
+  /* ============ 계정 관리 ============ */
+  function openUsers() {
+    $('#usersOverlay').classList.add('open');
+    $('#nu_msg').textContent = '';
+    $('#usersTbody').innerHTML = '<tr><td colspan="5" class="empty"><span class="spin"></span></td></tr>';
+    apiPost({ action: 'listUsers' }).then(function (d) { renderUsers(d.users || []); })
+      .catch(function (e) { $('#usersTbody').innerHTML = '<tr><td colspan="5" class="empty">' + esc(e.message) + '</td></tr>'; });
+  }
+  function renderUsers(list) {
+    if (!list.length) { $('#usersTbody').innerHTML = '<tr><td colspan="5" class="empty">계정 없음</td></tr>'; return; }
+    $('#usersTbody').innerHTML = list.map(function (u) {
+      var me = u.아이디 === (localStorage.getItem('partner_user_id') || '');
+      return '<tr><td><b>' + esc(u.아이디) + '</b></td><td>' + esc(u.이름 || '') + '</td><td>' + esc(u.권한 || '') +
+        '</td><td>' + esc(u.상태 || '') + '</td><td>' +
+        (list.length > 1 ? '<button class="btn sm danger del-user" data-id="' + esc(u.아이디) + '">삭제</button>' : '') + '</td></tr>';
+    }).join('');
+    $$('#usersTbody .del-user').forEach(function (b) {
+      b.onclick = function () {
+        var id = b.getAttribute('data-id');
+        if (!confirm(id + ' 계정을 삭제할까요?')) return;
+        apiPost({ action: 'deleteUser', id: id }).then(function () { toast('삭제됨', 'ok'); openUsers(); })
+          .catch(function (e) { toast('삭제 실패: ' + e.message, 'err'); });
+      };
+    });
+  }
+  function addUser() {
+    var id = $('#nu_id').value.trim(), pw = $('#nu_pw').value, name = $('#nu_name').value.trim();
+    if (!id || !pw) { $('#nu_msg').textContent = '아이디와 비밀번호를 입력하세요'; return; }
+    $('#nu_add').disabled = true; $('#nu_msg').textContent = '추가 중…';
+    apiPost({ action: 'createUser', id: id, pw: pw, name: name }).then(function () {
+      $('#nu_add').disabled = false; $('#nu_msg').textContent = '';
+      $('#nu_id').value = ''; $('#nu_pw').value = ''; $('#nu_name').value = '';
+      toast('계정이 추가됐어요', 'ok'); openUsers();
+    }).catch(function (e) { $('#nu_add').disabled = false; $('#nu_msg').textContent = e.message; });
   }
   function forceLogin(msg) {
     TOKEN = ''; USER = '';
@@ -136,7 +173,7 @@
       $('#au_submit').disabled = false;
       if (!d || !d.ok) { $('#au_msg').textContent = (d && d.error) || '실패했습니다'; return; }
       TOKEN = d.token; USER = d.name || id;
-      try { localStorage.setItem('partner_token', TOKEN); localStorage.setItem('partner_user', USER); } catch (e) {}
+      try { localStorage.setItem('partner_token', TOKEN); localStorage.setItem('partner_user', USER); localStorage.setItem('partner_user_id', id); } catch (e) {}
       enterApp();
     }).catch(function (e) { $('#au_submit').disabled = false; $('#au_msg').textContent = '연결 실패: ' + e.message; });
   }
@@ -409,6 +446,13 @@
     $('#au_pw').addEventListener('keydown', function (e) { if (e.key === 'Enter') doAuth(); });
     $('#au_id').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('#au_pw').focus(); });
     $('#logoutBtn').addEventListener('click', function () { forceLogin(); });
+
+    // 계정 관리
+    $('#usersBtn').addEventListener('click', openUsers);
+    $('#closeUsers').addEventListener('click', function () { $('#usersOverlay').classList.remove('open'); });
+    $('#closeUsers2').addEventListener('click', function () { $('#usersOverlay').classList.remove('open'); });
+    $('#usersOverlay').addEventListener('click', function (e) { if (e.target === this) this.classList.remove('open'); });
+    $('#nu_add').addEventListener('click', addUser);
 
     startAuthGate();
   });

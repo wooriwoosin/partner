@@ -29,6 +29,7 @@
       <span id="modeBadge" class="badge-mode">●</span>
       <div class="spacer"></div>
       <span id="userName" class="badge-mode"></span>
+      <button id="usersBtn" class="btn ghost sm">계정관리</button>
       <button id="logoutBtn" class="btn ghost sm">로그아웃</button>
       <button id="reloadBtn" class="btn ghost sm">새로고침</button>
       <button id="importBtn" class="btn ghost sm" style="display:none">시트에 초기데이터 넣기</button>
@@ -177,6 +178,35 @@
         <button id="cancelBtn" class="btn ghost">취소</button>
         <button id="saveBtn" class="btn primary">저장</button>
       </footer>
+    </div>
+  </div>
+
+  <!-- 계정 관리 모달 -->
+  <div id="usersOverlay" class="overlay">
+    <div class="modal" style="max-width:560px">
+      <header>
+        <h3>계정 관리</h3>
+        <button id="closeUsers" class="x">×</button>
+      </header>
+      <div class="body">
+        <div class="deliv-group" style="margin-top:0">
+          <div class="gh">새 계정 추가</div>
+          <div class="grid2">
+            <div class="field"><label>아이디</label><input id="nu_id" autocomplete="off" /></div>
+            <div class="field"><label>비밀번호</label><input id="nu_pw" type="password" autocomplete="new-password" /></div>
+            <div class="field"><label>이름 (표시용)</label><input id="nu_name" /></div>
+            <div class="field" style="justify-content:flex-end"><button id="nu_add" class="btn primary">+ 계정 추가</button></div>
+          </div>
+          <div id="nu_msg" class="auth-msg" style="text-align:left;min-height:0;margin:8px 0 0"></div>
+        </div>
+        <div style="margin-top:14px" class="table-wrap">
+          <table style="min-width:0">
+            <thead><tr><th>아이디</th><th>이름</th><th>권한</th><th>상태</th><th></th></tr></thead>
+            <tbody id="usersTbody"></tbody>
+          </table>
+        </div>
+      </div>
+      <footer><div class="spacer"></div><button id="closeUsers2" class="btn ghost">닫기</button></footer>
     </div>
   </div>
 
