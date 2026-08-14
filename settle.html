@@ -1,0 +1,1190 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>정산내역서 가공 앱 v6</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/fflate@0.8.2/umd/index.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@400;500;600;700&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f0f2f5;--card:#fff;--bd:#e2e6ea;
+  --bl:#2563eb;--bl-l:#eff6ff;--bl-d:#1d4ed8;
+  --pu:#7c3aed;--pu-l:#f5f3ff;--pu-d:#6d28d9;
+  --ok:#16a34a;--ok-l:#f0fdf4;--er:#dc2626;--er-l:#fef2f2;
+  --tx:#1e293b;--t2:#64748b;--t3:#94a3b8;
+  --r:12px;--rs:8px;--sh:0 1px 3px rgba(0,0,0,.08),0 4px 16px rgba(0,0,0,.05)
+}
+body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg);color:var(--tx);min-height:100vh;padding:24px 16px}
+.page{max-width:860px;margin:0 auto}
+.hdr{display:flex;align-items:center;gap:12px;margin-bottom:20px}
+.hico{width:42px;height:42px;background:var(--bl);border-radius:11px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.hico svg{width:21px;height:21px;fill:white}
+.htit{font-size:19px;font-weight:700}
+.hsub{font-size:12px;color:var(--t2);margin-top:1px}
+.panel{background:var(--card);border:1px solid var(--bd);border-radius:var(--r);box-shadow:var(--sh);overflow:hidden;margin-bottom:14px}
+.ph{padding:13px 16px;border-bottom:2px solid var(--bl);background:var(--bl-l);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.ptit{font-size:14px;font-weight:700;color:var(--bl-d)}
+.cnt-wrap{display:flex;gap:6px;flex-wrap:wrap;margin-left:4px}
+.cb{font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px}
+.cb.tax{background:#dbeafe;color:#1e40af}.cb.wit{background:#ede9fe;color:#5b21b6}
+.cb.skip{background:#f1f5f9;color:#64748b}.cb.unk{background:#fee2e2;color:#991b1b}
+.pb{padding:14px}
+.dz{border:2px dashed #cbd5e1;border-radius:var(--rs);padding:22px 16px;text-align:center;cursor:pointer;background:#f8fafc;transition:all .2s;position:relative}
+.dz:hover,.dz.ov{border-color:var(--bl);background:var(--bl-l)}
+.dz input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.dic{width:36px;height:36px;background:#e2e8f0;border-radius:8px;margin:0 auto 8px;display:flex;align-items:center;justify-content:center}
+.dic svg{width:18px;height:18px;stroke:var(--t2)}
+.dl{font-size:12px;font-weight:600;color:var(--t2)}
+.dh{font-size:11px;color:var(--t3);margin-top:2px}
+.fl{display:flex;flex-direction:column;gap:5px;margin-top:10px}
+.fi{display:flex;align-items:center;gap:7px;padding:7px 10px;background:#f8fafc;border:1px solid var(--bd);border-radius:6px;font-size:11px}
+.fi.dim{opacity:.5}.fi.warn{border-color:#fca5a5;background:#fff7f7}
+.fic{width:24px;height:24px;background:#dcfce7;border-radius:5px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.fic svg{width:12px;height:12px;stroke:var(--ok);fill:none;stroke-width:2}
+.fn{flex:1;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.fsz{font-size:10px;color:var(--t3);flex-shrink:0}
+.frm{width:16px;height:16px;border:none;background:none;cursor:pointer;color:var(--t3);font-size:14px;line-height:1;border-radius:3px;transition:color .15s;padding:0;flex-shrink:0}
+.frm:hover{color:var(--er)}
+.xt{font-size:9px;padding:1px 5px;border-radius:3px;font-weight:600;flex-shrink:0;white-space:nowrap}
+.xt.xls{background:#fef3c7;color:#92400e}.xt.xlsx{background:#dbeafe;color:#1e40af}
+.xt.calc{background:#f0fdf4;color:#166534;border:1px solid #bbf7d0}
+.xt.unk2{background:#fee2e2;color:#991b1b;border:1px solid #fecaca}
+.mt{font-size:9px;padding:2px 6px;border-radius:10px;font-weight:700;flex-shrink:0;white-space:nowrap}
+.mt.tax{background:#dbeafe;color:#1e40af}.mt.wit{background:#ede9fe;color:#5b21b6}
+.mt.skip{background:#f1f5f9;color:#94a3b8}.mt.unk{background:#fee2e2;color:#ef4444}
+.sr{display:flex;align-items:center;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid var(--bd)}
+.sl{font-size:11px;font-weight:500;color:var(--t2);flex-shrink:0}
+.sh{font-size:10px;color:var(--t3)}
+.rb{width:100%;padding:9px 16px;border:none;border-radius:var(--rs);font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:6px;font-family:inherit;margin-top:10px;color:#fff;background:var(--bl)}
+.rb:hover:not(:disabled){background:var(--bl-d);box-shadow:0 3px 8px rgba(37,99,235,.3)}
+.rb:disabled{opacity:.4;cursor:not-allowed}
+.rb svg{width:14px;height:14px;fill:none;stroke:#fff;stroke-width:2;stroke-linecap:round}
+.lb{background:#1e293b;border-radius:6px;padding:10px 12px;font-size:10px;font-family:'Menlo','Monaco',monospace;color:var(--t3);max-height:120px;overflow-y:auto;line-height:1.8;margin-top:8px}
+.lb .ok{color:#4ade80}.lb .er{color:#f87171}.lb .in{color:#60a5fa}.lb .sk{color:#94a3b8}
+.rw{margin-top:10px}
+.sbar{display:flex;gap:10px;padding:9px 11px;border-radius:6px;margin-bottom:10px;font-size:11px;flex-wrap:wrap;background:var(--bl-l);border:1px solid #bfdbfe}
+.sv{font-weight:700;color:var(--bl)}.slb{color:var(--t2)}
+.rg-hdr{font-size:11px;font-weight:700;padding:6px 10px;border-radius:6px;margin:8px 0 4px}
+.rg-hdr.tax{background:#dbeafe;color:#1e40af}.rg-hdr.wit{background:#ede9fe;color:#5b21b6}.rg-hdr.fail{background:#f1f5f9;color:#64748b}
+.rl{display:flex;flex-direction:column;gap:4px}
+.ri{display:flex;align-items:center;gap:8px;padding:8px 11px;border-radius:6px;border:1px solid var(--bd);font-size:11px}
+.ri.ok{background:var(--ok-l);border-color:#bbf7d0}.ri.ng{background:var(--er-l);border-color:#fecaca}.ri.sk{background:#f8fafc;border-color:#e2e8f0;opacity:.7}
+.rs{width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.rs.ok{background:var(--ok)}.rs.ng{background:var(--er)}.rs.sk{background:#cbd5e1}
+.rs svg{width:9px;height:9px;stroke:#fff;fill:none;stroke-width:2.5;stroke-linecap:round}
+.ri .rinfo{flex:1;min-width:0}
+.ri .rn{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ri .rd{font-size:10px;color:var(--t2);margin-top:1px}
+.db{padding:4px 9px;background:var(--ok);color:#fff;border:none;border-radius:5px;font-size:10px;font-weight:600;cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:3px;flex-shrink:0;transition:background .15s;white-space:nowrap}
+.db:hover{background:#15803d}
+.db svg{width:11px;height:11px;stroke:#fff;fill:none;stroke-width:2;stroke-linecap:round}
+.da{width:100%;padding:10px;background:var(--ok);color:#fff;border:none;border-radius:var(--rs);font-size:13px;font-weight:600;cursor:pointer;transition:background .15s;display:flex;align-items:center;justify-content:center;gap:6px;font-family:inherit;margin-top:10px}
+.da:hover:not(:disabled){background:#15803d}.da:disabled{opacity:.5;cursor:not-allowed}
+.da svg{width:15px;height:15px;stroke:#fff;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+
+/* ── 하단 두 패널 나란히 ── */
+.bottom-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
+@media(max-width:580px){.bottom-row{grid-template-columns:1fr}}
+
+/* ── 환수 파일 패널 ── */
+.hwn-panel{background:var(--card);border:1px solid #fde68a;border-radius:var(--r);box-shadow:var(--sh);overflow:hidden}
+.hwn-ph{padding:9px 14px;border-bottom:1px solid #fde68a;background:#fefce8;display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:space-between}
+.hwn-ph-left{display:flex;align-items:center;gap:7px}
+.hwn-ptit{font-size:12px;font-weight:700;color:#92400e}
+.hwn-badge{font-size:10px;font-weight:600;color:#92400e;background:#fef9c3;padding:1px 8px;border-radius:8px}
+.hwn-badge.loaded{background:#dcfce7;color:#166534}
+.hwn-body{padding:10px 14px;display:flex;flex-direction:column;gap:8px}
+.hwn-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.hwn-btn{position:relative;display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border:1.5px dashed #fbbf24;border-radius:6px;background:#fffbeb;cursor:pointer;font-size:11px;font-weight:600;color:#92400e;transition:all .15s;white-space:nowrap}
+.hwn-btn:hover{border-color:#f59e0b;background:#fef9c3}
+.hwn-btn input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.hwn-btn svg{width:13px;height:13px;stroke:#92400e;fill:none;stroke-width:2;stroke-linecap:round;pointer-events:none}
+.hwn-btn span{pointer-events:none}
+.hwn-reset{padding:4px 9px;background:none;border:1px solid #fca5a5;border-radius:5px;font-size:10px;font-weight:600;color:var(--er);cursor:pointer;font-family:inherit;transition:all .15s}
+.hwn-reset:hover{background:var(--er-l)}
+.hwn-msg{font-size:11px;color:var(--t2)}
+.hwn-msg b{color:var(--tx)}
+.hwn-msg.ok{color:var(--ok);font-weight:600}
+.hwn-msg.er{color:var(--er)}
+.hwn-chips{display:flex;flex-wrap:wrap;gap:4px}
+.hwn-chip{font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:#fef9c3;color:#854d0e;border:1px solid #fde68a;white-space:nowrap}
+
+/* ── 업체 DB 패널 ── */
+.csv-panel{background:var(--card);border:1px solid #e9d5ff;border-radius:var(--r);box-shadow:var(--sh);overflow:hidden}
+.csv-ph{padding:9px 14px;border-bottom:1px solid #e9d5ff;background:var(--pu-l);display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:space-between}
+.csv-ph-left{display:flex;align-items:center;gap:7px}
+.csv-ptit{font-size:12px;font-weight:700;color:var(--pu-d)}
+.csv-badge{font-size:10px;font-weight:600;color:var(--pu-d);background:#ede9fe;padding:1px 8px;border-radius:8px}
+.csv-badge.saved{background:#dcfce7;color:#166534}
+.csv-body{padding:10px 14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.csv-btn{position:relative;display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border:1.5px dashed #c4b5fd;border-radius:6px;background:#faf5ff;cursor:pointer;font-size:11px;font-weight:600;color:var(--pu-d);transition:all .15s;white-space:nowrap}
+.csv-btn:hover{border-color:var(--pu);background:var(--pu-l)}
+.csv-btn input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.csv-btn svg{width:13px;height:13px;stroke:var(--pu-d);fill:none;stroke-width:2;stroke-linecap:round;pointer-events:none}
+.csv-btn span{pointer-events:none}
+.csv-reset{padding:4px 9px;background:none;border:1px solid #fca5a5;border-radius:5px;font-size:10px;font-weight:600;color:var(--er);cursor:pointer;font-family:inherit;transition:all .15s}
+.csv-reset:hover{background:var(--er-l)}
+.csv-msg{flex:1;min-width:0;font-size:11px;color:var(--t2)}
+.csv-msg b{color:var(--tx)}
+.csv-msg.ok{color:var(--ok);font-weight:600}
+.csv-msg.er{color:var(--er)}
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="hdr">
+    <div class="hico">
+      <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6z"/><path d="M14 2v6h6M9 13h6M9 17h4" stroke="rgba(255,255,255,.65)" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>
+    </div>
+    <div>
+      <div class="htit">정산내역서 가공 앱 <span style="font-size:12px;color:var(--t3);font-weight:500">v6</span></div>
+      <div class="hsub">업체별 계산서 방식 자동 감지 · 세금계산서 / 원천세 자동 분류 · 환수 자동 합산 · xlsx · xls 지원</div>
+    </div>
+  </div>
+
+  <!-- ── 정산서 업로드 패널 ── -->
+  <div class="panel">
+    <div class="ph">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+      <div class="ptit">업체별 계산서 내역 업로드</div>
+      <div id="cnt" class="cnt-wrap"></div>
+    </div>
+    <div class="pb">
+      <div class="dz" id="dz">
+        <input type="file" id="fi" accept=".xlsx,.xls" multiple>
+        <div class="dic"><svg viewBox="0 0 24 24" stroke-linecap="round" fill="none" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg></div>
+        <div class="dl">xlsx / xls 파일 드래그 또는 클릭</div>
+        <div class="dh">여러 파일 한번에 업로드 → 업체별 계산서 방식 자동 감지</div>
+      </div>
+      <div class="fl" id="fl"></div>
+      <div class="sr">
+        <span class="sl">저장 파일명</span>
+        <span class="sh" style="color:var(--bl);font-weight:600">계산서형태_협력점명.xlsx</span>
+        <span class="sh">예) 정발행_웨이팅.xlsx · 역발행_보라네트워크(영웅).xlsx · 원천세_후모바일.xlsx</span>
+      </div>
+      <button class="rb" id="rb" disabled>
+        <svg viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>가공 실행
+      </button>
+      <div class="lb hidden" id="lb"></div>
+      <div class="rw hidden" id="rw">
+        <div class="sbar" id="sb"></div>
+        <div class="rl" id="rl"></div>
+        <button class="da hidden" id="da">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/><line x1="12" y1="11" x2="12" y2="17"/><polyline points="9 14 12 17 15 14"/></svg>
+          전체 저장 (ZIP)
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 하단: 환수파일 + 업체DB 나란히 (동일 크기) ── -->
+  <div class="bottom-row">
+
+    <!-- 환수 파일 패널 -->
+    <div class="hwn-panel">
+      <div class="hwn-ph">
+        <div class="hwn-ph-left">
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="#92400e" stroke-width="2" stroke-linecap="round"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+          <div class="hwn-ptit">환수 파일</div>
+          <span id="hwnBadge" class="hwn-badge">미업로드</span>
+        </div>
+        <button class="hwn-reset hidden" id="hwnReset">초기화</button>
+      </div>
+      <div class="hwn-body">
+        <div class="hwn-row">
+          <label class="hwn-btn">
+            <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+            <span>xlsx 업로드</span>
+            <input type="file" id="hwnFi" accept=".xlsx,.xls">
+          </label>
+          <div class="hwn-msg" id="hwnMsg">전체정산관리 xlsx · 협력점별 자동 분류</div>
+        </div>
+        <div class="hwn-chips hidden" id="hwnChips"></div>
+      </div>
+    </div>
+
+    <!-- 업체 DB 패널 -->
+    <div class="csv-panel">
+      <div class="csv-ph">
+        <div class="csv-ph-left">
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="#7c3aed" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 10h16M4 14h10"/></svg>
+          <div class="csv-ptit">업체 DB</div>
+          <span id="csvBadge" class="csv-badge">로딩 중...</span>
+        </div>
+        <button class="csv-reset" id="csvReset">초기화</button>
+      </div>
+      <div class="csv-body">
+        <label class="csv-btn">
+          <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+          <span>CSV 업로드</span>
+          <input type="file" id="csvFi" accept=".csv">
+        </label>
+        <div class="csv-msg" id="csvMsg">업체 추가·변경 시 새 CSV 업로드 → 브라우저에 자동 저장됩니다</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════
+// 업체별 계산서 방식 DB
+// ═══════════════════════════════════════════
+let PARTNER_MAP = {"김용민(장나리)":"원천세","뉴폰":"정발행","보라네트워크(영웅)":"역발행","옆커폰":"기타","주한통신":"정발행","휴먼네트웍스":"정발행","다연컴퍼니":"원천세","명산모바일":"원천세","바른모바일":"역발행","박형준":"원천세","신웅식":"원천세","안테나아이티":"역발행","스마트텔레콤":"원천세","외대통신":"원천세","윈윈커뮤니티":"역발행","지교정릉":"역발행","폰스토리_여주점":"역발행","폰스토리_청라점/가정점":"역발행","폰포유2":"원천세","폰필모바일":"원천세","폼":"원천세","휴대폰성지판다폰송도점":"정발행","천성호차장":"원천세","백메가":"정발행","백메가2":"정발행","ES정보통신":"원천세","KJ네트웍스":"정발행","가즈아통신(HuiH통신)":"정발행","기가토피아":"정발행","기산통신":"원천세","다은정보":"정발행","대성종합통신":"정발행","도매폰고양점":"원천세","도매폰백마점":"원천세","맨투맨솔루션":"정발행","비즈메이트":"정발행","삼성정보통신":"정발행","새용마":"정발행","서울모바일":"정발행","스카이네트웍스":"정발행","씨엘텔레콤":"정발행","아라(시운)":"정발행","알고리즘통신":"정발행","에이스CCTV":"원천세","영자통신":"정발행","예온정보통신":"정발행","위즈통신(대산)":"정발행","알오케이비(좋은하루)":"정발행","중앙정보통신":"정발행","코스모스통신":"정발행","콜라보":"정발행","통신모두":"원천세","통신백과":"정발행","티에스모바일":"정발행","평생정보통신(서울통신)":"정발행","호두텔레콤":"정발행","CS프로":"정발행","라인애드":"정발행","스마트다올":"정발행","엠제이통신":"정발행","제이엠비즈":"정발행","채움에스앤엘":"정발행","타임":"정발행","티코디":"정발행","플라츠":"정발행","피지아이티에스":"정발행","JB인터넷(에이블(JB))":"정발행","통신25":"정발행","넷퍼블릭":"정발행","청춘텔레콤":"원천세","서아컴퍼니":"역발행","TS통신백화점":"역발행","하니텔레콤":"역발행","송원재":"원천세","피시사구팔구닷컴":"역발행","주한미군(이희훈)":"원천세","도매폰황소점":"원천세","도매폰탄현점":"원천세","더폰컴퍼니":"역발행","호매실꽁폰":"원천세","아마존":"역발행","AH네트웍스":"역발행","도매폰금릉점":"원천세","도매폰금촌점":"원천세","에이앤비네트웍스":"역발행","케이스토어 세류점":"원천세","제이투모바일":"정발행","신민수":"원천세","택하다":"역발행","해드림(YK프리존)":"정발행","위드컴퍼니(도매)":"정발행","티에스피씨":"정발행","정수통신":"정발행","지엠컴퍼니":"정발행","제이투케이(엠에스정보통신)":"정발행","웨이팅":"정발행","인터넷톡톡":"역발행","인가업":"정발행","폰스홀릭":"역발행","블루스카이":"정발행","딸부자통신":"원천세","더마니드림":"정발행","보거스컴퍼니":"원천세","세명정보통신":"정발행","조선컴퍼니":"원천세","김선민팀장(강서)":"원천세","크라운모바일":"역발행","대박폰요기요":"역발행","럭키텔레콤":"원천세","리더스모바일":"원천세","문투넷":"정발행","고재일":"원천세","그린정보통신":"역발행","디텍":"정발행","스타링크":"역발행","이찬호":"원천세","퍼펙트키or현주친구":"역발행","펀모바일":"역발행","프로모바일":"역발행","JY정보통신":"정발행","당일민족":"원천세","파워통신":"원천세","휴이넘코리아":"역발행","성림(마운틴)":"정발행","제일씨앤씨":"정발행","강동후니모바일":"역발행","아진정보통신":"정발행","반월텔레콤":"정발행","지성통신":"정발행","빅워크솔루션":"정발행","호원에이치모바일":"역발행","인터넷월드":"원천세","이승일(사과나무)":"정발행","스타":"원천세","다온모바일":"역발행","다드림":"정발행","그린파머(KT라인)":"정발행","비엘온라인":"원천세","메타정보":"정발행","HKT샵":"원천세","대도종합통신":"원천세","양정민":"원천세","엔씨통신마북":"역발행","폰앤폰":"원천세","한별통신":"역발행","유비티즌":"정발행","카페아미가":"역발행","인가남(엔터통신)":"정발행","윤성렌탈":"정발행","엘케이통신":"정발행","에스모바일":"역발행","휴대폰아울렛":"원천세","천안모바일":"원천세","워터웨이브":"역발행","영미전자":"역발행","알뜰폰패밀리세종점":"역발행","구로원정보통신":"역발행","엠투엠(우사인)":"정발행","주종훈":"원천세","기가통신":"정발행","애니베스트":"원천세","우신현장영업(명웅)":"원천세","기가몬스터":"정발행","SB플러스":"정발행","행복한남매통신":"역발행","영모바일":"역발행","사만당":"정발행","폰달인":"역발행","마루모바일":"역발행","통통네트웍스":"정발행","BCY":"정발행","비교의힘":"정발행","다미통신":"원천세","토리(국대)":"정발행","투제이시스템(우리가족)":"정발행","유에스그룹":"역발행","더좋은인터넷":"역발행","주노텔레콤":"역발행","신에이치엠(홍성휴대폰멀티샵)":"역발행","신에이치엠(음봉총각네)":"역발행","신에이치엠(두정베스트)":"역발행","신에이치엠(휴대폰멀티샵아산점)":"역발행","신에이치엠(청당점)":"역발행","신에이치엠(총각네텔레콤(곽호영))":"역발행","신에이치엠(총각네텔레콤 백석점)":"원천세","신에이치엠(총각네텔레콤 신방점)":"역발행","신에이치엠(배방휴대폰멀티샵)":"역발행","신에이치엠(본점+두정동멀티샾+총각네텔레콤 청당점)":"역발행","아이스토어(황해숙)":"정발행","테라소셜리네트워크":"역발행","더원컴퍼니":"정발행","구름모바일":"역발행","와이즈모바일":"역발행","폰플러스_전북":"역발행","청년모바일":"역발행","예쓰통신":"역발행","영선팀장님":"원천세","김옥희팀장님":"원천세","모바일MZ":"정발행","윤텔레콤":"원천세","엠티엠인터내셔널":"역발행","SH텔레콤(이태호)":"정발행","김지연팀장님":"원천세","휴대폰11번가":"역발행","하온정보":"역발행","굿뉴스":"역발행","화인테크":"정발행","피오피정보통신":"역발행","비케이컴퍼니":"역발행","이형덕":"원천세","둥이통신":"역발행","비즈앤컴":"정발행","더베이스":"정발행","폰샵":"정발행","정직한모바일":"원천세","스마트패키지 ADT 공식대리점":"정발행","서아텔레콤":"역발행","다성":"정발행","광통신":"원천세","케이스토어 권선점":"원천세","이안모바일":"역발행","서연통신":"역발행","김성완":"원천세","테라넷":"정발행","케이스타":"정발행","전영식팀장님":"원천세","뽑기":"원천세","정결한청소":"원천세","플로넷(인사이트)":"정발행","황소모바일":"원천세","현대컴퍼니":"정발행","정향숙":"원천세","에스엠포에버":"역발행","아이러브휴대폰":"역발행","한통":"정발행","아이티엘(오백메가)":"정발행","일이팔":"역발행","영종국제통신":"역발행","더젬":"역발행","스피드통신":"정발행","피지(케이제이)":"원천세","와이즐리":"정발행","찾통":"원천세","유디통신":"원천세","신아이티정보통신":"정발행","대박통신둔촌점":"원천세","엠에스모바일":"역발행","케이스토어 권선시장점":"역발행","청아모바일":"역발행","이주훈":"원천세","에스컴퍼니":"역발행","에스컴퍼니(오프라인-소은)":"역발행","선길현팀장님":"원천세","제이제이통신":"역발행","헬로정보통신":"역발행","착한휴대폰":"역발행","위브네트웍스":"원천세","프린스통신":"역발행","이의택(이은호_직원)":"원천세","박성언(이은호_직원)":"원천세","이은호(나한민)":"원천세","아이엔에스정보":"정발행","위너스네트워크":"정발행","권은혜 팀장님":"원천세","에드커넥션":"역발행","올플렉스":"정발행","옐로우빈":"역발행","순정정보통신":"역발행","유픽":"정발행","미얀골":"역발행","김유리":"원천세","엠비통신":"역발행","봄봄":"역발행","아정당":"정발행","그린비텔레콤 중동점":"역발행","휴본":"정발행","호강정보통신":"역발행","은결컴퍼니":"정발행","하냥모바일":"정발행","세계로모바일":"원천세","장경선팀장님":"원천세","퍼드림모바일":"원천세","에스와이정보통신(리즈모바일)":"역발행","서울통신(평생정보)":"정발행","폰창고":"역발행","최주화팀장님":"원천세","네클":"정발행","한조무역":"원천세","에이치엘마켓":"역발행","솔모바일":"정발행","show예산":"원천세","여기서":"정발행","마루나":"정발행","코코모바일":"역발행","송원호":"원천세","송림정보통신":"원천세","마징가모바일샵":"역발행","다드림(김성재)":"정발행","정상텔레콤":"원천세","아프리카중고폰":"정발행","장현주팀장님":"원천세","삼쩜삼":"정발행","은성통신":"원천세","청춘(우경환)":"기타","유주컴퍼니(비교원)":"정발행","제이엠":"정발행","우승호팀장님":"원천세","누리통신":"정발행","폰닥터":"역발행","랜드씨앤씨":"원천세","또넷트워크":"정발행","파워전기통신":"정발행","금아":"정발행","유나통신":"역발행","휴대폰지식인":"정발행","청담정보통신":"원천세","배인섭팀장님":"원천세","유경석":"원천세","솔솔":"정발행","휴대폰성지SYH":"역발행","모두드림":"역발행","홀릭마켓":"원천세","노마진통신":"원천세","골드라인":"역발행","이미경팀장님":"원천세","성공폰":"원천세","힐링통신":"정발행","온길":"정발행","후모바일":"원천세","이행우사장님":"원천세","아이엠커넥트":"정발행","바른드림커넥션":"정발행","디프클린":"정발행","삼대정보통신":"역발행","한상정사장님":"원천세","네오":"정발행","다쏜다 흥덕점":"정발행","박명화사장님":"원천세","유경민사장님":"정발행","온모바일":"역발행","폰찍좌 4호점":"정발행","세정텔레콤":"원천세","지에스지 주식회사":"역발행","정의훈사장님":"원천세","김용균":"원천세","원원":"정발행","삼은정보":"역발행","쇼예산":"원천세","모두하우스":"정발행","에스지네트워크":"역발행","장군폰":"역발행","제이에스모바일":"정발행","서정철":"원천세","직폰":"역발행","갈마통신":"원천세","통신의신":"역발행","웨이표":"원천세","세웅통신":"정발행","유아이통신":"정발행","아이앤피":"정발행","영짱/YOUNG":"원천세","다쏜다 다산점":"역발행","폰메이트":"역발행","스피드통신(익산)":"정발행","휴대폰성지 부엉폰 봉담점":"역발행","잇고":"정발행","김해경부장님":"원천세","아이오":"정발행","폰찍좌6호점":"원천세","통신사기119":"원천세","우리집렌탈":"정발행","백석점_옆커폰":"역발행","개롱역점_옆커폰":"역발행","왜관점_옆커폰":"역발행","망원점_옆커폰":"역발행","안양비산점_옆커폰":"역발행","신제주점_옆커폰":"역발행","한성대점_옆커폰":"역발행","아라역점_옆커폰":"역발행","풍무역점_옆커폰":"역발행","상봉역점_옆커폰":"역발행","청파점_옆커폰":"역발행","김포장기점_옆커폰":"역발행","창동점_옆커폰":"역발행","당곡점_옆커폰":"역발행","망포점_옆커폰":"역발행","기흥중동점_옆커폰":"역발행","금오점_옆커폰":"정발행","일산웨스턴돔점_옆커폰":"역발행","원종점_옆커폰":"역발행","역동점_옆커폰":"역발행","무학봉점_옆커폰":"역발행","답십리점_옆커폰":"역발행","별내점_옆커폰":"역발행","중곡점_옆커폰":"역발행","행신점_옆커폰":"원천세","이수역점_옆커폰":"역발행","상모점_옆커폰":"역발행","북가좌점_옆커폰":"역발행","당산점_옆커폰":"역발행","구파발점_옆커폰":"역발행","보라매역점_옆커폰":"역발행","배곧신도시점_옆커폰":"역발행","상왕십리점_옆커폰":"역발행","광주양벌점_옆커폰":"역발행","동두천지행점_옆커폰":"역발행","사가정점_옆커폰":"원천세","신내점_옆커폰":"역발행","산동점_옆커폰":"역발행","목동동점_옆커폰":"역발행","가락시장점_옆커폰":"역발행","응암역점_옆커폰":"역발행","금천시흥점_옆커폰":"역발행","부천중동남부점_옆커폰":"역발행","문덕점_옆커폰":"역발행","송내점_옆커폰":"역발행","본점_옆커폰":"역발행","신방화점_옆커폰":"역발행","역촌점_옆커폰":"역발행","남가좌점_옆커폰":"역발행","고촌점_옆커폰":"역발행","별내별가람점_옆커폰":"역발행","김천혁신도시점_옆커폰":"역발행","성복역점_옆커폰":"정발행","광흥창역점_옆커폰":"역발행","분당오리점_옆커폰":"역발행","만수점_옆커폰":"역발행","경안점_옆커폰":"역발행","불광역점_옆커폰":"역발행","김포구래점_옆커폰":"역발행","삼전역점_옆커폰":"역발행","이대역점_옆커폰":"역발행","경기광주경인점_옆커폰":"역발행","부천상동점_옆커폰":"역발행","시흥은계점_옆커폰":"역발행","역삼점_옆커폰":"역발행","부천소사점_옆커폰":"역발행","성지수유점_옆커폰":"역발행","미아점_옆커폰":"역발행","운양점_옆커폰":"역발행","가산점_옆커폰":"역발행","고덕강일점_옆커폰":"원천세","달동점_옆커폰":"역발행","진접점_옆커폰":"역발행","일산라페스타점_옆커폰":"역발행","안성점_옆커폰":"역발행","소나무향기안양_옆커폰":"역발행","구영리점_옆커폰":"역발행","단대오거리점_옆커폰":"역발행","마산양덕점_옆커폰":"역발행","익산모현_옆커폰":"역발행","내발산점_옆커폰":"역발행","부천점_옆커폰":"역발행","충무공동점_옆커폰":"역발행","송정점_옆커폰":"역발행","울산삼산점_옆커폰":"역발행","매곡점_옆커폰":"역발행","서초점_옆커폰":"역발행","영등포양평역점_옆커폰":"역발행","화정점_옆커폰":"역발행","수원남문점_옆커폰":"역발행","토평구리점_옆커폰":"역발행","태전점_옆커폰":"역발행","성북길음점_옆커폰":"역발행","구월점_옆커폰":"역발행","등촌점_옆커폰":"원천세","인천논현점_옆커폰":"역발행","호평점_옆커폰":"역발행","천하제주점_옆커폰":"역발행","수원금곡점_옆커폰":"역발행","상일점_옆커폰":"역발행","천곡점_옆커폰":"역발행","옆커폰_관리지점":"미발행","신대원사장님":"정발행","통큰휴대폰":"역발행"};
+
+const ALIAS_MAP = {
+  'JB인터넷':           'JB인터넷(에이블(JB))',
+  '에이블(JB)':         'JB인터넷(에이블(JB))',
+  '에이블(JB)(양정환)': 'JB인터넷(에이블(JB))',
+};
+
+// ═══════════════════════════════════════════
+// 환수 데이터 저장소
+// ═══════════════════════════════════════════
+let HWNSOO_MAP = {};      // norm → [ rowVals[], ... ]
+let HWNSOO_RAW = {};      // norm → raw 협력점 문자열
+let HWNSOO_SCHEMA = null; // 환수 파일 열 구조 (동적 감지)
+
+function stripSym(s) {
+  return String(s||'').replace(/[★☆■□◆◇●○◎△▲▼▽\s·•※]/g,'').trim();
+}
+
+async function parseHwnsoo(file) {
+  const buf = await file.arrayBuffer();
+  const wb  = new ExcelJS.Workbook();
+  await wb.xlsx.load(buf);
+  const ws = wb.worksheets[0];
+
+  // ── 헤더행 찾기 ──────────────────────────────────────
+  let hdrR = 0;
+  for (let r = 1; r <= Math.min(5, ws.rowCount); r++) {
+    if (String(ws.getRow(r).getCell(1).value||'').trim() === 'No') { hdrR=r; break; }
+  }
+  if (!hdrR) throw new Error('헤더행(No)을 찾을 수 없습니다');
+
+  // ── 실제 최대 열 수 ───────────────────────────────────
+  let maxCol = 0;
+  for (let r = hdrR; r <= Math.min(hdrR+10, ws.rowCount); r++) {
+    ws.getRow(r).eachCell((cell, c) => { if (c > maxCol) maxCol = c; });
+  }
+
+  // ── 메인헤더 (Row1): col→이름, 이름→col ─────────────
+  const nameByCol  = {};   // col(number) → 이름
+  const colByName  = {};   // 이름 → col(number)  ※ 중복시 Row1 우선
+  ws.getRow(hdrR).eachCell((cell, c) => {
+    const v = String(cell.value||'').trim();
+    if (v) { nameByCol[c] = v; colByName[v] = c; }
+  });
+
+  // ── 서브헤더 (Row2): 별도 저장, 메인헤더 덮어쓰지 않음 ─
+  const subColByName = {};  // 서브 이름 → col
+  const subNameByCol = {};  // col → 서브 이름
+  ws.getRow(hdrR+1).eachCell((cell, c) => {
+    const v = String(cell.value||'').trim();
+    if (v) { subColByName[v] = c; subNameByCol[c] = v; }
+  });
+
+  // ── 병합셀 정보를 원본 그대로 읽기 ──────────────────
+  // ws.model.merges: ["A1:B2", ...] 형식 문자열 배열
+  // hdrR 행 기준 병합만 추출
+  const mergeSchema = [];  // { minCol, maxCol, minRow, maxRow }
+  function cellRef(s) {  // "AB12" → {col, row}
+    const m = s.match(/^([A-Z]+)(\d+)$/);
+    if (!m) return null;
+    let col = 0;
+    for (const ch of m[1]) col = col*26 + ch.charCodeAt(0) - 64;
+    return { col, row: +m[2] };
+  }
+
+  const mergesArr = ws.model && ws.model.merges ? ws.model.merges : [];
+  for (const rangeStr of mergesArr) {
+    const parts = rangeStr.split(':');
+    if (parts.length !== 2) continue;
+    const tl = cellRef(parts[0]);
+    const br = cellRef(parts[1]);
+    if (!tl || !br) continue;
+    // hdrR 행에 걸친 병합만
+    if (tl.row === hdrR || br.row === hdrR) {
+      mergeSchema.push({ minCol:tl.col, maxCol:br.col, minRow:tl.row, maxRow:br.row });
+    }
+  }
+
+  // ── 협력점/정산금액 열 ────────────────────────────────
+  const pCol      = colByName['협력점'] || colByName['인수처'] || 7;
+  const salaryCol = colByName['정산금액'] || 24;
+
+  // ── 서브헤더로 차감내역 범위 결정 ────────────────────
+  const subNames = ['사은품','물류','쿠폰','선납','할인탭','미비서류','기타'];
+  const subCols  = subNames.map(n => subColByName[n]).filter(c => c !== undefined);
+  const deductStart = subCols.length ? Math.min(...subCols) : (colByName['차감내역'] || 14);
+  const deductEnd   = subCols.length ? Math.max(...subCols) : (deductStart + 6);
+
+  // ── 열 너비 ──────────────────────────────────────────
+  const colWidths = {};
+  for (let c = 1; c <= maxCol; c++) {
+    const col = ws.getColumn(c);
+    if (col && col.width) colWidths[c] = col.width;
+  }
+  colWidths[salaryCol-1] = Math.max(colWidths[salaryCol-1]||0, 13);
+  colWidths[salaryCol]   = Math.max(colWidths[salaryCol]  ||0, 16);
+
+  const schema = {
+    maxCol, pCol, salaryCol,
+    nameByCol, colByName,
+    subColByName, subNameByCol,
+    mergeSchema,    // ← 원본 병합 정보 그대로
+    deductStart, deductEnd,
+    colWidths,
+  };
+
+  // ── 데이터 파싱 ──────────────────────────────────────
+  const byP = {}, rawN = {};
+  for (let r = hdrR+2; r <= ws.rowCount; r++) {
+    const row = ws.getRow(r);
+    const f   = row.getCell(1).value;
+    if (f === null || f === undefined) continue;
+    if (typeof f === 'string' && (f.includes('합계') || f.includes('현재 화면'))) continue;
+    const rawP = String(row.getCell(pCol).value||'').trim();
+    if (!rawP) continue;
+    const norm = stripSym(rawP);
+    if (!norm) continue;
+    const vals = [];
+    for (let c = 1; c <= maxCol; c++) {
+      let v = row.getCell(c).value;
+      if (v && typeof v === 'object' && !(v instanceof Date) && v.result !== undefined) v = v.result;
+      if (typeof v === 'number' && isNaN(v)) v = null;
+      if (v instanceof Date) v = normalizeDate(v);
+      vals.push(v);
+    }
+    if (!byP[norm]) byP[norm] = [];
+    byP[norm].push(vals);
+    rawN[norm] = rawP;
+  }
+  return { byP, rawN, schema };
+}
+
+
+function getHwn(rawPartner) {
+  if (!rawPartner||!Object.keys(HWNSOO_MAP).length) return null;
+  const norm=stripSym(rawPartner);
+  if (HWNSOO_MAP[norm]) return HWNSOO_MAP[norm];
+  for (const [k,v] of Object.entries(HWNSOO_MAP)) {
+    if (norm.includes(k)||k.includes(norm)) return v;
+  }
+  return null;
+}
+
+// ─── 환수 파일 UI ───────────────────────────
+document.getElementById('hwnFi').addEventListener('change', async function() {
+  const file=this.files[0]; if(!file) return; this.value='';
+  const badge=document.getElementById('hwnBadge');
+  const msg=document.getElementById('hwnMsg');
+  const chips=document.getElementById('hwnChips');
+  badge.textContent='읽는 중...'; badge.className='hwn-badge';
+  try {
+    const {byP, rawN, schema}=await parseHwnsoo(file);
+    HWNSOO_MAP=byP; HWNSOO_RAW=rawN; HWNSOO_SCHEMA=schema;
+    const cnt=Object.keys(byP).length;
+    badge.textContent=cnt+'개 협력점'; badge.className='hwn-badge loaded';
+    msg.innerHTML='<b>'+file.name+'</b> 로드 완료'; msg.className='hwn-msg ok';
+    document.getElementById('hwnReset').classList.remove('hidden');
+    chips.innerHTML='';
+    Object.keys(byP).forEach(norm => {
+      const chip=document.createElement('span');
+      chip.className='hwn-chip';
+      chip.textContent=stripSym(rawN[norm]||norm);
+      chips.appendChild(chip);
+    });
+    chips.classList.remove('hidden');
+  } catch(e) {
+    badge.textContent='오류'; badge.className='hwn-badge';
+    msg.textContent='오류: '+e.message; msg.className='hwn-msg er';
+  }
+});
+document.getElementById('hwnReset').addEventListener('click', () => {
+  HWNSOO_MAP={}; HWNSOO_RAW={}; HWNSOO_SCHEMA=null;
+  document.getElementById('hwnBadge').textContent='미업로드';
+  document.getElementById('hwnBadge').className='hwn-badge';
+  document.getElementById('hwnMsg').textContent='전체정산관리 xlsx · 협력점별 자동 분류';
+  document.getElementById('hwnMsg').className='hwn-msg';
+  document.getElementById('hwnChips').innerHTML='';
+  document.getElementById('hwnChips').classList.add('hidden');
+  document.getElementById('hwnReset').classList.add('hidden');
+});
+
+// ═══════════════════════════════════════════
+// 파일명 → 협력점/모드 감지
+// ═══════════════════════════════════════════
+function getMode(filename) {
+  const base=filename.replace(/[.](xlsx|xls)$/i,'');
+  const m=base.match(/([^/\\]+?)[\s\-]정산내역서/);
+  if(!m) return {mode:'unknown',name:null,rawName:null,displayName:null,type:null};
+  const raw=m[1].trim();
+  const stripped=raw.replace(/^[^\uAC00-\uD7A3a-zA-Z0-9(（]+/,'').replace(/[^\uAC00-\uD7A3a-zA-Z0-9)）]+$/,'').trim();
+  function resolveHM(s){const hm=s.match(/^(.+?)_HM$/);return hm?'신에이치엠('+hm[1]+')':null;}
+  const last=stripped.split('_').filter(t=>t.trim()).pop()?.trim()||stripped;
+  const cands=[raw,stripped,resolveHM(raw),resolveHM(stripped),ALIAS_MAP[raw],ALIAS_MAP[stripped],ALIAS_MAP[last],last].filter(Boolean);
+  let name=raw,type=null;
+  for(const c of cands){if(PARTNER_MAP[c]){name=c;type=PARTNER_MAP[c];break;}}
+  let mode='unknown';
+  if(type==='정발행'||type==='역발행') mode='tax';
+  else if(type==='원천세') mode='withhold';
+  else if(type==='기타'||type==='미발행') mode='skip';
+  return {mode,name,rawName:raw,displayName:stripped,type};
+}
+
+// ═══════════════════════════════════════════
+// 상수
+// ═══════════════════════════════════════════
+const NUM_FMT='_-* #,##0_-;\\-* #,##0_-;_-* "-"_-;_-@_-';
+function colToLetter(col){let s='';while(col>0){s=String.fromCharCode(64+(col%26||26))+s;col=Math.floor((col-1)/26);}return s;}
+// 날짜 정규화: 시/분/초 제거, 순수 날짜만 UTC 기준으로 저장
+// ExcelJS Date → Excel 저장 시 시간대 오차로 하루 밀리는 문제 방지
+function normalizeDate(v) {
+  if (!(v instanceof Date)) return v;
+  // 년/월/일만 추출해서 UTC 정오(12:00)로 저장 → 어떤 시간대도 날짜 안 바뀜
+  return new Date(Date.UTC(v.getFullYear(), v.getMonth(), v.getDate(), 12, 0, 0));
+}
+// 이미 병합된 셀은 건너뜀 (Cannot merge already merged cells 오류 방지)
+function safeMerge(ws, r1, c1, r2, c2) {
+  try {
+    // 해당 범위에 이미 병합이 있으면 스킵
+    for (const m of ws.model.merges || []) {
+      // ExcelJS model.merges는 "A1:A2" 형식 문자열 배열
+      const [tl, br] = m.split(':');
+      if (!tl || !br) continue;
+      const tc = tl.replace(/[0-9]/g,''), tr_ = +tl.replace(/[A-Z]/gi,'');
+      const bc = br.replace(/[0-9]/g,''), br_ = +br.replace(/[A-Z]/gi,'');
+      function letterToCol(l){let n=0;for(const ch of l.toUpperCase())n=n*26+(ch.charCodeAt(0)-64);return n;}
+      const mc1=letterToCol(tc),mr1=tr_,mc2=letterToCol(bc),mr2=br_;
+      // 겹치는지 확인
+      if (r1<=mr2&&r2>=mr1&&c1<=mc2&&c2>=mc1) return; // 겹침 → 스킵
+    }
+    ws.mergeCells(r1, c1, r2, c2);
+  } catch(e) {
+    // 오류 시 조용히 무시
+  }
+}
+const T={style:'thin'}, TBRD={left:T,right:T,top:T,bottom:T};
+const HF={name:'돋움',size:9,bold:true,color:{argb:'FF000000'}};
+const HFill={type:'pattern',pattern:'solid',fgColor:{argb:'FF808080'}};
+const HA={vertical:'middle',horizontal:'center',wrapText:true};
+const DF={name:'돋움',size:9,color:{argb:'FF000000'}};
+
+// ═══════════════════════════════════════════
+// xls → Workbook
+// ═══════════════════════════════════════════
+async function xlsToWb(file) {
+  const buf=await file.arrayBuffer();
+  const bytes=new Uint8Array(buf);
+  const bom=(bytes[0]===0xFF&&bytes[1]===0xFE)?2:0;
+  const text=new TextDecoder('utf-16le').decode(bytes.slice(bom));
+  const rows=[];let pos=0,lo=text.toLowerCase();
+  while(pos<text.length){const ts=lo.indexOf('<tr',pos);if(ts<0)break;const te=text.indexOf('>',ts);if(te<0)break;const tc=lo.indexOf('</tr>',te);if(tc<0)break;rows.push(text.slice(te+1,tc));pos=tc+5;}
+  if(!rows.length) throw new Error('xls 파싱 실패');
+  function pCells(rh){const o=[];let p=0;const rl=rh.toLowerCase();while(p<rh.length){const tp=rl.indexOf('<td',p),hp=rl.indexOf('<th',p);if(tp<0&&hp<0)break;let ts,tn;if(tp<0){ts=hp;tn='th';}else if(hp<0){ts=tp;tn='td';}else if(tp<hp){ts=tp;tn='td';}else{ts=hp;tn='th';}const ae=rh.indexOf('>',ts);if(ae<0)break;const a=rh.slice(ts,ae+1);const ct='</'+tn+'>';const ce=rl.indexOf(ct,ae);if(ce<0){p=ae+1;continue;}const inn=rh.slice(ae+1,ce);const cs=a.match(/colspan\s*=\s*["']?(\d+)["']?/i);const colspan=cs?parseInt(cs[1]):1;let val=inn.replace(/<[^>]+>/g,'').replace(/&amp;/g,'&').replace(/&nbsp;/g,'').replace(/&#xA;/g,'\n').replace(/&lt;/g,'<').replace(/&gt;/g,'>').trim();let sc=null;const sm=inn.match(/color\s*:\s*(#[0-9a-fA-F]{6})/i);if(sm)sc=sm[1].replace('#','').toUpperCase();o.push({val,colspan,sc});p=ce+ct.length;}return o;}
+  let sn='Sheet1';const nm=file.name.replace(/\.xls$/i,'');const sm=nm.match(/[가-힣a-zA-Z★☆○●■□◆◇*]+[-_][가-힣a-zA-Z]+[-_](\d+)/);if(sm){const r2=nm.replace(/^(가공전|가공후)[_\-\s■★☆○●□◆◇*]+/i,'');sn=r2.replace(/_(\d+)_*$/,'($1)').replace(/_/g,'');}
+  const wb=new ExcelJS.Workbook();const ws=wb.addWorksheet(sn);
+  const CW={1:4.3,2:9.1,3:14.1,4:36.6,5:17,6:22.9,7:7.3,8:9.1,9:10.3,10:7.9,11:10.3,13:13.9,14:9.7,15:10,22:5.4,23:11.1,25:15.1,26:11.1,28:36.6,29:14,30:12.6,31:14,32:7.4,33:10.3,35:12.3,36:15.4,37:14.1};
+  for(const[c,w]of Object.entries(CW))ws.getColumn(+c).width=w;
+  const NC=new Set([14,19,23,25,32]),DC=new Set([11,12,26,33,34]),TC=new Set([4,37]),DP=new Set([10,11,25,32,33]),TP=new Set([3]);
+  function toV(s,c0){if(!s)return null;if(DP.has(c0)){const m=s.match(/^(\d{4})-(\d{2})-(\d{2})$/);if(m)return normalizeDate(new Date(+m[1],+m[2]-1,+m[3]));return s;}if(TP.has(c0))return s;const n=s.replace(/,/g,'');if(n!==''&&!isNaN(n)&&n.trim()!=='')return Number(n);return s||null;}
+  const H1={1:{v:'No',rs:2},2:{v:'정산종류',rs:2},3:{v:'고객명',rs:2},4:{v:'가입서비스',rs:2},5:{v:'상품명',rs:2},6:{v:'상품옵션',rs:2},7:{v:'회선수',rs:2},8:{v:'셋트유형',rs:2},9:{v:'인수처',rs:2},10:{v:'유치자',rs:2},11:{v:'접수일',rs:2},12:{v:'개통일',rs:2},13:{v:'상태',rs:2},14:{v:'약정금액',rs:2},15:{v:'차감내역',cs:7},22:{v:'수납',rs:2},23:{v:'번들수수료',rs:2},24:{v:'동판수수료',rs:2},25:{v:'정산금액',rs:2},26:{v:'정산예정일',rs:2},27:{v:'정산완료일',rs:2},28:{v:'정산 비고',rs:2},29:{v:'미비서류 비고',rs:2},30:{v:'사은품',rs:2},31:{v:'사은품 지급처',rs:2},32:{v:'금액',rs:2},33:{v:'지급예정',rs:2},34:{v:'지급완료',rs:2},35:{v:'약정',rs:2},36:{v:'할인탭',rs:2},37:{v:'부가서비스',rs:2}};
+  const H2={15:'사은품',16:'물류',17:'쿠폰',18:'선납',19:'할인탭',20:'미비서류',21:'기타'};
+  const r1=ws.getRow(1);r1.height=22.5;const r2=ws.getRow(2);r2.height=22.5;
+  for(const[cs,h]of Object.entries(H1)){const c=+cs;const cell=r1.getCell(c);cell.value=h.v;cell.font=HF;cell.fill=HFill;cell.alignment=HA;cell.border=TBRD;if(h.rs===2){ws.mergeCells(1,c,2,c);r2.getCell(c).border=TBRD;}if(h.cs===7)ws.mergeCells(1,c,1,c+6);}
+  for(const[cs,v]of Object.entries(H2)){const c=+cs;const cell=r2.getCell(c);cell.value=v;cell.font=HF;cell.fill=HFill;cell.alignment=HA;cell.border=TBRD;}
+  let er=2;
+  for(let ri=2;ri<rows.length;ri++){er++;const cells=pCells(rows[ri]);const row=ws.getRow(er);row.height=20.25;let col=1;for(const{val,colspan,sc}of cells){const cell=row.getCell(col);const v=toV(val,col-1);cell.value=v;const fc=sc?'FF'+sc:'FF000000';cell.font={name:'돋움',size:9,color:{argb:fc}};cell.border=TBRD;cell.alignment={vertical:'middle'};if(DC.has(col)&&v instanceof Date){cell.value=normalizeDate(v);cell.numFmt='mm-dd-yy';}else if(TC.has(col))cell.numFmt='@';else if(NC.has(col)&&typeof v==='number')cell.numFmt='#,##0';col+=Math.max(colspan,1);}}
+  ws.getColumn(25).width=Math.max(ws.getColumn(25).width||0,18);return wb;
+}
+
+// ═══════════════════════════════════════════
+// loadAndClean
+// ═══════════════════════════════════════════
+async function loadAndClean(file) {
+  let wb;
+  if(/\.xls$/i.test(file.name)){wb=await xlsToWb(file);}
+  else{const buf=await file.arrayBuffer();wb=new ExcelJS.Workbook();await wb.xlsx.load(buf);}
+  const ws=wb.worksheets[0];
+  let sumRow=null;
+  for(let r=ws.rowCount;r>=1;r--){const v=ws.getRow(r).getCell(1).value;if(v&&typeof v==='string'&&(v.includes('합계')||v.includes('현재 화면'))){sumRow=r;break;}}
+  if(!sumRow) throw new Error('합계 행을 찾을 수 없습니다');
+  ws.spliceRows(sumRow,1);
+  const lastData=ws.rowCount;
+  let supplyVal=0;
+  for(let r=3;r<=lastData;r++){const v=ws.getRow(r).getCell(25).value;if(typeof v==='number')supplyVal+=v;}
+  ws.getColumn(25).width=Math.max(ws.getColumn(25).width||0,18);
+  // 정산서 전체 날짜 셀 정규화 (시분초 포함 datetime → 순수 날짜)
+  for(let r=3;r<=lastData;r++){
+    ws.getRow(r).eachCell((cell)=>{
+      if(cell.value instanceof Date) cell.value=normalizeDate(cell.value);
+    });
+  }
+  return {wb,ws,lastData,supplyVal};
+}
+
+async function toBlob(wb){const o=await wb.xlsx.writeBuffer();return new Blob([o],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});}
+
+// ═══════════════════════════════════════════
+// 환수 섹션 헤더/데이터 쓰기 (ExcelJS용)
+// 환수 섹션 열 구조: col9=협력점, col16=차감내역(colspan7: P~V), col26=정산금액(Z)
+// ═══════════════════════════════════════════
+function buildHwnHeader(ws, rowNum, subRowNum, schema) {
+  const s = schema || HWNSOO_SCHEMA;
+  const ROW_OFFSET = rowNum - 1;  // 원본 hdrR(1)을 rowNum으로 이동할 오프셋
+
+  // ── Row1/Row2 셀 값 쓰기 ─────────────────────────────
+  const r1 = ws.getRow(rowNum);   r1.height = 22.5;
+  const r2 = ws.getRow(subRowNum); r2.height = 22.5;
+
+  if (s && s.nameByCol) {
+    // 메인헤더
+    for (const [colStr, name] of Object.entries(s.nameByCol)) {
+      const c = +colStr;
+      const cell = r1.getCell(c);
+      cell.value = name; cell.font = HF; cell.fill = HFill; cell.alignment = HA; cell.border = TBRD;
+    }
+    // 서브헤더
+    for (const [colStr, name] of Object.entries(s.subNameByCol || {})) {
+      const c = +colStr;
+      const cell = r2.getCell(c);
+      cell.value = name; cell.font = HF; cell.fill = HFill; cell.alignment = HA; cell.border = TBRD;
+    }
+  } else {
+    // 폴백 37열
+    const HDR = {1:'No',2:'정산종류',3:'고객명',4:'가입서비스',5:'상품명',6:'상품옵션',
+      7:'회선수',8:'셋트유형',9:'협력점',10:'유치자',11:'접수일',12:'개통일',
+      13:'개통상태',14:'접수경로',15:'약정금액',16:'차감내역',
+      23:'수납',24:'번들수수료',25:'동판수수료',26:'정산금액',27:'정산예정일',
+      28:'정산완료일',29:'정산 비고',30:'미비서류 비고',31:'사은품지급처',
+      32:'현금',33:'지급예정',34:'지급완료',35:'약정',36:'할인탭',37:'부가서비스'};
+    const SUB = {16:'사은품',17:'물류',18:'쿠폰',19:'선납',20:'할인탭',21:'미비서류',22:'기타'};
+    for (const [cs,v] of Object.entries(HDR)) {
+      const cell = r1.getCell(+cs);
+      cell.value=v; cell.font=HF; cell.fill=HFill; cell.alignment=HA; cell.border=TBRD;
+    }
+    for (const [cs,v] of Object.entries(SUB)) {
+      const cell = r2.getCell(+cs);
+      cell.value=v; cell.font=HF; cell.fill=HFill; cell.alignment=HA; cell.border=TBRD;
+    }
+  }
+
+  // ── 병합 재현: mergeSchema 원본 그대로 ───────────────
+  if (s && s.mergeSchema && s.mergeSchema.length > 0) {
+    // 원본 병합을 rowNum 위치로 오프셋하여 재현
+    for (const m of s.mergeSchema) {
+      const newMinRow = m.minRow + ROW_OFFSET;
+      const newMaxRow = m.maxRow + ROW_OFFSET;
+      try {
+        ws.mergeCells(newMinRow, m.minCol, newMaxRow, m.maxCol);
+      } catch(e) {
+        // 이미 병합된 경우 무시
+      }
+    }
+  } else {
+    // 폴백: 직접 계산
+    const ds = (s && s.deductStart) || 16;
+    const de = (s && s.deductEnd)   || 22;
+    const maxC = (s && s.maxCol) || 37;
+    for (let c = 1; c <= maxC; c++) {
+      if (c >= ds && c <= de) continue;
+      try { ws.mergeCells(rowNum, c, subRowNum, c); } catch(e) {}
+    }
+    try { ws.mergeCells(rowNum, ds, rowNum, de); } catch(e) {}
+  }
+}
+
+function writeHwnDataRows(ws, startRow, hwnRows) {
+  // schema에서 날짜/숫자 열 동적 감지
+  const s = HWNSOO_SCHEMA;
+  const cn = s ? s.colByName : {};
+
+  // 날짜 컬럼
+  const dateNames = ['접수일','개통일','개통기한','정산예정일','정산완료일','지급예정','지급완료'];
+  const DATE_COLS = new Set(dateNames.map(n => cn[n]).filter(Boolean));
+  if (!DATE_COLS.size) { DATE_COLS.add(11); DATE_COLS.add(12); DATE_COLS.add(27); DATE_COLS.add(33); DATE_COLS.add(34); }
+
+  // 숫자 컬럼
+  const numNames = ['약정금액','수납','번들수수료','동판수수료','정산금액','현금'];
+  const NUM_COLS = new Set(numNames.map(n => cn[n]).filter(Boolean));
+  if (!NUM_COLS.size) { NUM_COLS.add(15); NUM_COLS.add(23); NUM_COLS.add(24); NUM_COLS.add(25); NUM_COLS.add(26); NUM_COLS.add(32); }
+
+  let cur = startRow;
+  hwnRows.forEach(vals => {
+    const dr = ws.getRow(cur); dr.height = 20.25;
+    vals.forEach((v, i) => {
+      const c = i + 1;
+      const cell = dr.getCell(c);
+      if (v === null || v === undefined) cell.value = null;
+      else if (v instanceof Date) { cell.value = normalizeDate(v); cell.numFmt = 'mm-dd-yy'; }
+      else cell.value = v;
+      cell.font = DF; cell.border = TBRD; cell.alignment = {vertical:'middle'};
+      if (NUM_COLS.has(c) && typeof v === 'number') cell.numFmt = '#,##0';
+    });
+    cur++;
+  });
+  return cur;
+}
+
+function writeHwnSummary(ws, startRow, dataStart, dataEnd, mode) {
+  // 정산금액 열: schema에서 동적으로 가져오기
+  const s = HWNSOO_SCHEMA;
+  const salaryCol = (s && s.salaryCol) ? s.salaryCol : 26;
+  const colL = salaryCol - 1;  // 레이블 열 (정산금액 바로 앞)
+  const colV = salaryCol;      // 값 열 (정산금액)
+  const colLetter = colToLetter(colV); // Z, X 등
+
+  let cur = startRow;
+  let hwnSum = 0;
+  for (let r = dataStart; r <= dataEnd; r++) {
+    const v = ws.getRow(r).getCell(colV).value;
+    if (typeof v === 'number') hwnSum += v;
+  }
+
+  if (mode === 'tax') {
+    const sr = ws.getRow(cur);
+    sr.getCell(colL).value = '공급가액'; sr.getCell(colL).font = {name:'굴림',size:10}; sr.getCell(colL).alignment = {vertical:'middle'};
+    sr.getCell(colV).value = {formula:`SUM(${colLetter}${dataStart}:${colLetter}${dataEnd})`, result:hwnSum};
+    sr.getCell(colV).font = {name:'굴림',size:10}; sr.getCell(colV).numFmt = NUM_FMT; sr.getCell(colV).alignment = {vertical:'middle'};
+    const sR = cur; cur++;
+    const tr = ws.getRow(cur);
+    const ttlVal = Math.round(hwnSum*1.1*100)/100;
+    tr.getCell(colL).value = '합계'; tr.getCell(colL).font = {name:'굴림',size:10,bold:true,color:{argb:'FFFF0000'}}; tr.getCell(colL).fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FFFFFF00'}}; tr.getCell(colL).alignment = {vertical:'middle'};
+    tr.getCell(colV).value = {formula:`${colLetter}${sR}*1.1`, result:ttlVal};
+    tr.getCell(colV).font = {name:'굴림',size:10,bold:true,color:{argb:'FFFF0000'}}; tr.getCell(colV).fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FFFFFF00'}};
+    tr.getCell(colV).numFmt = NUM_FMT; tr.getCell(colV).alignment = {vertical:'middle'};
+    const totalRow = cur; cur++;
+    return {totalRow, nextRow:cur, colV, colLetter};
+  } else {
+    const witVal   = Math.round(hwnSum*0.033*1000)/1000;
+    const totalVal = Math.round((hwnSum - witVal)*1000)/1000;
+    const sr = ws.getRow(cur);
+    sr.getCell(colL).value = '공급가액'; sr.getCell(colL).font = {name:'굴림',size:10}; sr.getCell(colL).alignment = {vertical:'middle'};
+    sr.getCell(colV).value = {formula:`SUM(${colLetter}${dataStart}:${colLetter}${dataEnd})`, result:hwnSum};
+    sr.getCell(colV).font = {name:'굴림',size:10}; sr.getCell(colV).numFmt = NUM_FMT; sr.getCell(colV).alignment = {vertical:'middle'};
+    const sR = cur; cur++;
+    const wr = ws.getRow(cur);
+    wr.getCell(colL).value = '원천세'; wr.getCell(colL).font = {name:'굴림',size:10}; wr.getCell(colL).alignment = {vertical:'middle'};
+    wr.getCell(colV).value = {formula:`${colLetter}${sR}*3.3%`, result:witVal};
+    wr.getCell(colV).font = {name:'굴림',size:10}; wr.getCell(colV).numFmt = NUM_FMT; wr.getCell(colV).alignment = {vertical:'middle'};
+    const wR = cur; cur++;
+    const tr = ws.getRow(cur);
+    tr.getCell(colL).value = '합계'; tr.getCell(colL).font = {name:'굴림',size:10,bold:true,color:{argb:'FFFF0000'}}; tr.getCell(colL).fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FFFFFF00'}}; tr.getCell(colL).alignment = {vertical:'middle'};
+    tr.getCell(colV).value = {formula:`${colLetter}${sR}-${colLetter}${wR}`, result:totalVal};
+    tr.getCell(colV).font = {name:'굴림',size:10,bold:true,color:{argb:'FFFF0000'}}; tr.getCell(colV).fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FFFFFF00'}};
+    tr.getCell(colV).numFmt = NUM_FMT; tr.getCell(colV).alignment = {vertical:'middle'};
+    const totalRow = cur; cur++;
+    return {totalRow, nextRow:cur, colV, colLetter};
+  }
+}
+
+// 총합계: 정산서 col(정산서열) + 환수섹션 col(환수열) — 서로 다른 열일 수 있음
+function writeTotalRowMixed(ws, row, 정산합계Row, 환수합계Row, 정산열, 환수열) {
+  // 정산서 합계열(Y=col25) 기준으로 레이블/값 위치 결정
+  const colL = 24, colV = 25;
+  ws.getColumn(colL).width = Math.max(ws.getColumn(colL).width||0, 13);
+  ws.getColumn(colV).width = Math.max(ws.getColumn(colV).width||0, 28);
+  const tr = ws.getRow(row); tr.height = 28;
+  const lc = tr.getCell(colL);
+  lc.value='총합계'; lc.font={name:'굴림',size:18,bold:true,color:{argb:'FFFF0000'}};
+  lc.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFFFFF00'}}; lc.alignment={vertical:'middle',horizontal:'right'};
+  const vc = tr.getCell(colV);
+  // 환수 합계 열이 정산서와 다를 수 있으므로 각자의 열 참조
+  vc.value={formula:`${정산열}${정산합계Row}+${환수열}${환수합계Row}`};
+  vc.font={name:'굴림',size:18,bold:true,color:{argb:'FFFF0000'}};
+  vc.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFFFFF00'}};
+  vc.numFmt=NUM_FMT; vc.alignment={vertical:'middle'};
+}
+
+function writeTotalRow(ws, row, 정산합계Row, 환수합계Row) {
+  ws.getColumn(19).width = Math.max(ws.getColumn(19).width || 0, 14);
+  ws.getColumn(20).width = Math.max(ws.getColumn(20).width || 0, 28);
+  const tr = ws.getRow(row); tr.height = 28;
+  const lc = tr.getCell(19);
+  lc.value = '총합계';
+  lc.font = {name:'굴림',size:18,bold:true,color:{argb:'FFFF0000'}};
+  lc.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FFFFFF00'}};
+  lc.alignment = {vertical:'middle',horizontal:'right'};
+  const vc = tr.getCell(20);
+  vc.value = {formula:`Y${정산합계Row}+Z${환수합계Row}`};
+  vc.font = {name:'굴림',size:18,bold:true,color:{argb:'FFFF0000'}};
+  vc.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FFFFFF00'}};
+  vc.numFmt = NUM_FMT;
+  vc.alignment = {vertical:'middle'};
+}
+
+
+// ═══════════════════════════════════════════
+// 정산서(37열)에 환수 섹션 추가 전용 함수들
+// 환수 파일 열 구조와 무관하게 정산서 37열 기준으로 매핑해서 씀
+// ═══════════════════════════════════════════
+
+// 환수 파일 colByName → 37열 정산서 col 매핑 생성
+function buildHwnColMap() {
+  const s = HWNSOO_SCHEMA;
+  if (!s || !s.colByName) return null;
+  const cn = s.colByName; // 환수파일 열이름→열번호
+
+  // 37열 정산서 기준 열이름→열번호
+  const target37 = {
+    'No':1,'정산종류':2,'고객명':3,'가입서비스':4,'상품명':5,'상품옵션':6,
+    '회선수':7,'셋트유형':8,'인수처':9,'유치자':10,'접수일':11,'개통일':12,
+    '상태':13,'약정금액':14,
+    '사은품':15,'물류':16,'쿠폰':17,'선납':18,'할인탭서브':19,'미비서류':20,'기타':21,
+    '수납':22,'번들수수료':23,'동판수수료':24,'정산금액':25,'정산예정일':26,
+    '정산완료일':27,'정산 비고':28,'미비서류 비고':29,
+    '사은품 지급처':31,'사은품지급처':31,'금액':32,'현금':32,
+    '지급예정':33,'지급완료':34,'약정':35,'할인탭':36,'부가서비스':37,
+  };
+  // 환수 파일에만 있는 이름 → 정산서 이름 매핑
+  const nameAlias = {
+    '협력점':'인수처', '개통상태':'상태', '개통기한':null,
+    '사은품지급처':'사은품 지급처', '현금':'금액',
+    '할인탭':null,  // 서브헤더 할인탭은 col19(서브), 메인 할인탭은 col36 — 데이터는 col36으로
+  };
+
+  // 환수파일 col번호 → 정산서 col번호 매핑
+  const colMap = {}; // hwn_col → sheet_col
+  for (const [hwnName, hwnCol] of Object.entries(cn)) {
+    const mappedName = (hwnName in nameAlias) ? nameAlias[hwnName] : hwnName;
+    if (!mappedName) continue;
+    const sheetCol = target37[mappedName];
+    if (sheetCol) colMap[hwnCol] = sheetCol;
+  }
+  return colMap;
+}
+
+// 정산서 37열 기준 환수 헤더 (buildHwnHeader 37열 고정판)
+function buildHwnHeader37(ws, rowNum, subRowNum) {
+  const HDR = {1:'No',2:'정산종류',3:'고객명',4:'가입서비스',5:'상품명',6:'상품옵션',
+    7:'회선수',8:'셋트유형',9:'인수처',10:'유치자',11:'접수일',12:'개통일',
+    13:'상태',14:'약정금액',15:'차감내역',
+    22:'수납',23:'번들수수료',24:'동판수수료',25:'정산금액',26:'정산예정일',
+    27:'정산완료일',28:'정산 비고',29:'미비서류 비고',
+    30:'사은품',31:'사은품 지급처',32:'금액',33:'지급예정',34:'지급완료',
+    35:'약정',36:'할인탭',37:'부가서비스'};
+  const SUB = {15:'사은품',16:'물류',17:'쿠폰',18:'선납',19:'할인탭',20:'미비서류',21:'기타'};
+
+  const r1 = ws.getRow(rowNum); r1.height = 22.5;
+  for (const [cs,v] of Object.entries(HDR)) {
+    const c = +cs, cell = r1.getCell(c);
+    cell.value=v; cell.font=HF; cell.fill=HFill; cell.alignment=HA; cell.border=TBRD;
+    if (c !== 15) safeMerge(ws, rowNum, c, subRowNum, c);
+  }
+  safeMerge(ws, rowNum, 15, rowNum, 21); // 차감내역 colspan7
+
+  const r2 = ws.getRow(subRowNum); r2.height = 22.5;
+  for (const [cs,v] of Object.entries(SUB)) {
+    const c = +cs, cell = r2.getCell(c);
+    cell.value=v; cell.font=HF; cell.fill=HFill; cell.alignment=HA; cell.border=TBRD;
+  }
+}
+
+// 정산서 37열 기준으로 환수 데이터 행 쓰기 (열 매핑 적용)
+function writeHwnDataRows37(ws, startRow, hwnRows) {
+  const colMap = buildHwnColMap(); // hwn_col → sheet_col
+  const DATE_COLS = new Set([11,12,26,33,34]);
+  const NUM_COLS  = new Set([14,22,23,24,25,32]);
+  let cur = startRow;
+
+  hwnRows.forEach(vals => {
+    const dr = ws.getRow(cur); dr.height = 20.25;
+    // colMap이 있으면 매핑, 없으면 그대로 (37열 동일 구조인 경우)
+    if (colMap) {
+      vals.forEach((v, i) => {
+        const srcCol = i + 1;
+        const dstCol = colMap[srcCol];
+        if (!dstCol) return;
+        const cell = dr.getCell(dstCol);
+        if (v === null || v === undefined) cell.value = null;
+        else if (v instanceof Date) { cell.value = normalizeDate(v); cell.numFmt = 'mm-dd-yy'; }
+        else cell.value = v;
+        cell.font = DF; cell.border = TBRD; cell.alignment = {vertical:'middle'};
+        if (NUM_COLS.has(dstCol) && typeof v === 'number') cell.numFmt = '#,##0';
+      });
+    } else {
+      // 같은 37열 구조 — 그대로 쓰기
+      vals.forEach((v, i) => {
+        const c = i + 1;
+        const cell = dr.getCell(c);
+        if (v === null || v === undefined) cell.value = null;
+        else if (v instanceof Date) { cell.value = normalizeDate(v); cell.numFmt = 'mm-dd-yy'; }
+        else cell.value = v;
+        cell.font = DF; cell.border = TBRD; cell.alignment = {vertical:'middle'};
+        if (NUM_COLS.has(c) && typeof v === 'number') cell.numFmt = '#,##0';
+      });
+    }
+    cur++;
+  });
+  return cur;
+}
+
+// 정산서 37열 기준 환수 합계 (col24=레이블, col25=Y열 정산금액)
+// 환수 정산금액: 소스의 정산금액 열을 찾아 합산
+function writeHwnSummary37(ws, startRow, dataStart, dataEnd, mode) {
+  const colL = 24, colV = 25; // 정산서 37열 기준: col24=레이블, col25=Y열
+
+  // 환수 합계: Y열(col25) 기준으로 합산
+  let hwnSum = 0;
+  for (let r = dataStart; r <= dataEnd; r++) {
+    const v = ws.getRow(r).getCell(colV).value;
+    if (typeof v === 'number') hwnSum += v;
+  }
+
+  let cur = startRow;
+  if (mode === 'tax') {
+    const sr = ws.getRow(cur);
+    sr.getCell(colL).value='공급가액'; sr.getCell(colL).font={name:'굴림',size:10}; sr.getCell(colL).alignment={vertical:'middle'};
+    sr.getCell(colV).value={formula:`SUM(Y${dataStart}:Y${dataEnd})`,result:hwnSum};
+    sr.getCell(colV).font={name:'굴림',size:10}; sr.getCell(colV).numFmt=NUM_FMT; sr.getCell(colV).alignment={vertical:'middle'};
+    const sR=cur; cur++;
+    const ttlVal=Math.round(hwnSum*1.1*100)/100;
+    const tr=ws.getRow(cur);
+    tr.getCell(colL).value='합계'; tr.getCell(colL).font={name:'굴림',size:10,bold:true,color:{argb:'FFFF0000'}}; tr.getCell(colL).fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFFFFF00'}}; tr.getCell(colL).alignment={vertical:'middle'};
+    tr.getCell(colV).value={formula:`Y${sR}*1.1`,result:ttlVal};
+    tr.getCell(colV).font={name:'굴림',size:10,bold:true,color:{argb:'FFFF0000'}}; tr.getCell(colV).fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFFFFF00'}};
+    tr.getCell(colV).numFmt=NUM_FMT; tr.getCell(colV).alignment={vertical:'middle'};
+    const totalRow=cur; cur++;
+    return {totalRow, nextRow:cur};
+  } else {
+    const witVal=Math.round(hwnSum*0.033*1000)/1000;
+    const totalVal=Math.round((hwnSum-witVal)*1000)/1000;
+    const sr=ws.getRow(cur);
+    sr.getCell(colL).value='공급가액'; sr.getCell(colL).font={name:'굴림',size:10}; sr.getCell(colL).alignment={vertical:'middle'};
+    sr.getCell(colV).value={formula:`SUM(Y${dataStart}:Y${dataEnd})`,result:hwnSum};
+    sr.getCell(colV).font={name:'굴림',size:10}; sr.getCell(colV).numFmt=NUM_FMT; sr.getCell(colV).alignment={vertical:'middle'};
+    const sR=cur; cur++;
+    const wr=ws.getRow(cur);
+    wr.getCell(colL).value='원천세'; wr.getCell(colL).font={name:'굴림',size:10}; wr.getCell(colL).alignment={vertical:'middle'};
+    wr.getCell(colV).value={formula:`Y${sR}*3.3%`,result:witVal};
+    wr.getCell(colV).font={name:'굴림',size:10}; wr.getCell(colV).numFmt=NUM_FMT; wr.getCell(colV).alignment={vertical:'middle'};
+    const wR=cur; cur++;
+    const tr=ws.getRow(cur);
+    tr.getCell(colL).value='합계'; tr.getCell(colL).font={name:'굴림',size:10,bold:true,color:{argb:'FFFF0000'}}; tr.getCell(colL).fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFFFFF00'}}; tr.getCell(colL).alignment={vertical:'middle'};
+    tr.getCell(colV).value={formula:`Y${sR}-Y${wR}`,result:totalVal};
+    tr.getCell(colV).font={name:'굴림',size:10,bold:true,color:{argb:'FFFF0000'}}; tr.getCell(colV).fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFFFFF00'}};
+    tr.getCell(colV).numFmt=NUM_FMT; tr.getCell(colV).alignment={vertical:'middle'};
+    const totalRow=cur; cur++;
+    return {totalRow, nextRow:cur};
+  }
+}
+
+// 총합계: 정산서 37열 기준 col24=레이블, col25=Y열
+function writeTotalRow37(ws, row, 정산합계Row, 환수합계Row) {
+  ws.getColumn(24).width = Math.max(ws.getColumn(24).width||0, 13);
+  ws.getColumn(25).width = Math.max(ws.getColumn(25).width||0, 28);
+  const tr = ws.getRow(row); tr.height = 28;
+  const lc = tr.getCell(24);
+  lc.value='총합계'; lc.font={name:'굴림',size:18,bold:true,color:{argb:'FFFF0000'}};
+  lc.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFFFFF00'}}; lc.alignment={vertical:'middle',horizontal:'right'};
+  const vc = tr.getCell(25);
+  vc.value={formula:`Y${정산합계Row}+Y${환수합계Row}`};
+  vc.font={name:'굴림',size:18,bold:true,color:{argb:'FFFF0000'}};
+  vc.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFFFFF00'}};
+  vc.numFmt=NUM_FMT; vc.alignment={vertical:'middle'};
+}
+
+// ═══════════════════════════════════════════
+// processTax — 정산서+환수 합산 (세금계산서)
+// ═══════════════════════════════════════════
+async function processTax(file, hwnRows) {
+  const {wb, ws, lastData, supplyVal} = await loadAndClean(file);
+  const totalVal = Math.round(supplyVal * 1.1 * 100) / 100;
+
+  // 정산 합계 (col24=레이블, col25=Y열) — 정산서 37열 고정
+  const sR = lastData + 2, tR = lastData + 3;
+  const sx = ws.getRow(sR).getCell(24); sx.value='공급가액'; sx.font={name:'굴림',size:10}; sx.alignment={vertical:'middle'};
+  const sy = ws.getRow(sR).getCell(25); sy.value={formula:`SUM(Y3:Y${lastData})`,result:supplyVal}; sy.font={name:'굴림',size:10}; sy.numFmt=NUM_FMT; sy.alignment={vertical:'middle'};
+  const tx = ws.getRow(tR).getCell(24); tx.value='합계'; tx.font={name:'굴림',size:10,bold:true,color:{argb:'FFFF0000'}}; tx.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFFFFF00'}}; tx.alignment={vertical:'middle'};
+  const ty = ws.getRow(tR).getCell(25); ty.value={formula:`Y${sR}*1.1`,result:totalVal}; ty.font={name:'굴림',size:10,bold:true,color:{argb:'FFFF0000'}}; ty.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFFFFF00'}}; ty.numFmt=NUM_FMT; ty.alignment={vertical:'middle'};
+
+  if (hwnRows && hwnRows.length > 0) {
+    // 빈행 4개
+    for (let i=1;i<=4;i++) ws.getRow(tR+i).height=15;
+    // 환수섹션 헤더 — 환수파일 원본 열 구조(schema) 그대로
+    const hdrR = tR + 5;
+    buildHwnHeader(ws, hdrR, hdrR+1);
+    // 환수 데이터 — 환수파일 원본 열 구조 그대로
+    const dataStart = hdrR + 2;
+    const nextAfterData = writeHwnDataRows(ws, dataStart, hwnRows);
+    const dataEnd = nextAfterData - 1;
+    // 빈행1
+    ws.getRow(nextAfterData).height = 15;
+    // 환수 합계 — schema salaryCol 기준(X열 등)
+    const hwnS = writeHwnSummary(ws, nextAfterData+1, dataStart, dataEnd, 'tax');
+    // 빈행5
+    for (let i=0;i<5;i++) ws.getRow(hwnS.nextRow+i).height=15;
+    // 총합계 — 정산서 Y(col25) + 환수섹션 colLetter
+    writeTotalRowMixed(ws, hwnS.nextRow+5, tR, hwnS.totalRow, 'Y', hwnS.colLetter);
+  }
+
+  // 파일명 결정용 totalNet
+  const s = HWNSOO_SCHEMA;
+  const salaryIdx = s ? (s.salaryCol||24) - 1 : 23;
+  const _hwnNet = (hwnRows&&hwnRows.length>0) ? hwnRows.reduce((a,r)=>a+(typeof r[salaryIdx]==='number'?r[salaryIdx]:0),0)*1.1 : 0;
+  const totalNet = totalVal + _hwnNet;
+  return {blob: await toBlob(wb), supplyVal, totalNet};
+}
+
+async function processWit(file, hwnRows) {
+  const {wb, ws, lastData, supplyVal} = await loadAndClean(file);
+  const witVal   = Math.round(supplyVal * 0.033 * 1000) / 1000;
+  const totalVal = Math.round((supplyVal - witVal) * 1000) / 1000;
+
+  const sR = lastData + 2, wR = lastData + 3, tR = lastData + 4;
+  const sx = ws.getRow(sR).getCell(24); sx.value='공급가액'; sx.font={name:'굴림',size:10}; sx.alignment={vertical:'middle'};
+  const sy = ws.getRow(sR).getCell(25); sy.value={formula:`SUM(Y3:Y${lastData})`,result:supplyVal}; sy.font={name:'굴림',size:10}; sy.numFmt=NUM_FMT; sy.alignment={vertical:'middle'};
+  const wx2 = ws.getRow(wR).getCell(24); wx2.value='원천세'; wx2.font={name:'굴림',size:10}; wx2.alignment={vertical:'middle'};
+  const wy = ws.getRow(wR).getCell(25); wy.value={formula:`Y${sR}*3.3%`,result:witVal}; wy.font={name:'굴림',size:10}; wy.numFmt=NUM_FMT; wy.alignment={vertical:'middle'};
+  const tx = ws.getRow(tR).getCell(24); tx.value='합계'; tx.font={name:'굴림',size:10,bold:true,color:{argb:'FFFF0000'}}; tx.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFFFFF00'}}; tx.alignment={vertical:'middle'};
+  const ty = ws.getRow(tR).getCell(25); ty.value={formula:`Y${sR}-Y${wR}`,result:totalVal}; ty.font={name:'굴림',size:10,bold:true,color:{argb:'FFFF0000'}}; ty.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFFFFF00'}}; ty.numFmt=NUM_FMT; ty.alignment={vertical:'middle'};
+
+  if (hwnRows && hwnRows.length > 0) {
+    for (let i=1;i<=4;i++) ws.getRow(tR+i).height=15;
+    const hdrR = tR + 5;
+    buildHwnHeader(ws, hdrR, hdrR+1);
+    const dataStart = hdrR + 2;
+    const nextAfterData = writeHwnDataRows(ws, dataStart, hwnRows);
+    const dataEnd = nextAfterData - 1;
+    ws.getRow(nextAfterData).height = 15;
+    const hwnS = writeHwnSummary(ws, nextAfterData+1, dataStart, dataEnd, 'wit');
+    for (let i=0;i<5;i++) ws.getRow(hwnS.nextRow+i).height=15;
+    writeTotalRowMixed(ws, hwnS.nextRow+5, tR, hwnS.totalRow, 'Y', hwnS.colLetter);
+  }
+
+  const s = HWNSOO_SCHEMA;
+  const salaryIdx = s ? (s.salaryCol||24) - 1 : 23;
+  const _hwnNet = (hwnRows&&hwnRows.length>0) ? (()=>{const sm=hwnRows.reduce((a,r)=>a+(typeof r[salaryIdx]==='number'?r[salaryIdx]:0),0);return sm-sm*0.033;})() : 0;
+  const totalNet = totalVal + _hwnNet;
+  return {blob: await toBlob(wb), supplyVal, totalNet};
+}
+
+
+// ═══════════════════════════════════════════
+// processHwnOnly — 가공전 정산서 없이 환수만으로 파일 생성
+// ═══════════════════════════════════════════
+async function processHwnOnly(partnerRawName, hwnRows, mode) {
+  const wb = new ExcelJS.Workbook();
+  const sheetName = stripSym(partnerRawName) || '환수내역서';
+  const ws = wb.addWorksheet(sheetName);
+
+  const s = HWNSOO_SCHEMA;
+
+  // ── 열 너비: schema의 원본 파일 열 너비를 그대로 복원 ──
+  if (s && s.colWidths) {
+    for (const [c, w] of Object.entries(s.colWidths)) {
+      ws.getColumn(+c).width = w;
+    }
+  } else {
+    // 폴백: 37열 기본값
+    const CW = {1:4.2,2:9.1,3:14.1,4:36.6,5:17,6:22.9,7:7.2,8:9.1,9:10.2,
+      10:7.9,11:10.2,12:13,13:13.9,14:9.8,15:10,16:13,17:13,18:13,19:11,
+      20:21,21:13,22:5.4,23:11.1,24:13,25:13,26:11.7,27:11.1,28:36.6,
+      29:14,30:12.6,31:14,32:7.4,33:10.2,34:13,35:12.2,36:15.4,37:14.1};
+    for (const [c,w] of Object.entries(CW)) ws.getColumn(+c).width=w;
+  }
+
+  // 헤더(row1, row2)
+  buildHwnHeader(ws, 1, 2, s);
+
+  // 데이터(row3~)
+  const dataStart = 3;
+  const nextAfterData = writeHwnDataRows(ws, dataStart, hwnRows);
+  const dataEnd = nextAfterData - 1;
+
+  // 빈행1
+  ws.getRow(nextAfterData).height = 15;
+
+  // 합계
+  const hwnS = writeHwnSummary(ws, nextAfterData+1, dataStart, dataEnd, mode);
+
+  // 합계 열 너비 강제 보장 (##### 방지)
+  if (s && s.salaryCol) {
+    ws.getColumn(s.salaryCol - 1).width = Math.max(ws.getColumn(s.salaryCol-1).width||0, 13);
+    ws.getColumn(s.salaryCol).width     = Math.max(ws.getColumn(s.salaryCol).width    ||0, 16);
+  }
+
+  return {blob: await toBlob(wb), supplyVal: 0};
+}
+
+// ═══════════════════════════════════════════
+// 업체 DB – localStorage
+// ═══════════════════════════════════════════
+const DBK='partnerMapV1',DBMK='partnerMapMeta';
+function loadDb(){try{const r=localStorage.getItem(DBK);if(!r)return false;const s=JSON.parse(r);if(typeof s!=='object'||!Object.keys(s).length)return false;Object.keys(PARTNER_MAP).forEach(k=>delete PARTNER_MAP[k]);Object.assign(PARTNER_MAP,s);return true;}catch(e){return false;}}
+function saveDb(map,meta){try{localStorage.setItem(DBK,JSON.stringify(map));localStorage.setItem(DBMK,JSON.stringify(meta));}catch(e){alert('저장 실패: '+e.message);}}
+function getMeta(){try{return JSON.parse(localStorage.getItem(DBMK)||'null');}catch(e){return null;}}
+function updCsvUI(){
+  const badge=document.getElementById('csvBadge'),msg=document.getElementById('csvMsg');
+  const meta=getMeta(),cnt=Object.keys(PARTNER_MAP).length;
+  if(meta&&meta.source==='csv'){badge.textContent='CSV DB ('+cnt+'개) 💾저장됨';badge.className='csv-badge saved';msg.innerHTML='<b>'+meta.filename+'</b> · '+cnt+'개 업체'+(meta.date?' · 기준일 '+meta.date:'')+' · <span style="color:var(--t3)">브라우저에 저장됩니다</span>';msg.className='csv-msg ok';}
+  else{badge.textContent='내장 DB ('+cnt+'개)';badge.className='csv-badge';msg.innerHTML='업체 추가·변경 시 새 CSV 업로드 → 브라우저에 자동 저장됩니다 <span style="color:var(--t3)">· 컬럼: 협력점명, 계산서형태</span>';msg.className='csv-msg';}
+}
+function pCsvL(l){const o=[];let c='',q=false;for(let i=0;i<l.length;i++){const ch=l[i];if(ch==='"'){q=!q;continue;}if(ch===','&&!q){o.push(c);c='';continue;}c+=ch;}o.push(c);return o;}
+document.getElementById('csvFi').addEventListener('change',async function(){
+  const file=this.files[0];if(!file)return;this.value='';
+  const msg=document.getElementById('csvMsg');msg.textContent='읽는 중...';msg.className='csv-msg';
+  try{const buf=await file.arrayBuffer();let text='';for(const enc of['euc-kr','utf-8']){try{const t=new TextDecoder(enc).decode(buf);if(t&&!t.includes('\uFFFD')){text=t;break;}}catch(e){}}if(!text)text=new TextDecoder('utf-8').decode(buf);
+  const lines=text.split(/\r?\n/).filter(l=>l.trim());const hdr=pCsvL(lines[0]);const ni=hdr.findIndex(h=>h.includes('협력점명'));const ti=hdr.findIndex(h=>h.includes('계산서형태'));if(ni<0||ti<0)throw new Error('"협력점명" 또는 "계산서형태" 컬럼 없음');
+  const map={};for(let i=1;i<lines.length;i++){const cells=pCsvL(lines[i]);const n=(cells[ni]||'').trim();const t=(cells[ti]||'').trim();if(n&&t)map[n]=t;}const cnt=Object.keys(map).length;if(!cnt)throw new Error('유효한 업체 데이터 없음');
+  Object.keys(PARTNER_MAP).forEach(k=>delete PARTNER_MAP[k]);Object.assign(PARTNER_MAP,map);const dm=file.name.match(/(\d{4}-\d{2}-\d{2})/);saveDb(map,{source:'csv',filename:file.name,date:dm?dm[1]:'',cnt});updCsvUI();renderList();}
+  catch(e){msg.textContent='오류: '+e.message;msg.className='csv-msg er';}
+});
+document.getElementById('csvReset').addEventListener('click',()=>{if(!confirm('저장된 CSV DB를 삭제하고 내장 DB로 되돌리겠습니까?'))return;localStorage.removeItem(DBK);localStorage.removeItem(DBMK);location.reload();});
+(function(){loadDb();document.addEventListener('DOMContentLoaded',updCsvUI);if(document.readyState!=='loading')updCsvUI();})();
+
+// ═══════════════════════════════════════════
+// 파일 업로드 UI
+// ═══════════════════════════════════════════
+const dz=document.getElementById('dz'),fi=document.getElementById('fi'),fl=document.getElementById('fl'),rb=document.getElementById('rb'),lb=document.getElementById('lb'),rw=document.getElementById('rw'),sb=document.getElementById('sb'),rl=document.getElementById('rl'),da=document.getElementById('da');
+let files=[],results=[];
+dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('ov');});
+dz.addEventListener('dragleave',()=>dz.classList.remove('ov'));
+dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('ov');addFiles([...e.dataTransfer.files]);});
+fi.addEventListener('change',()=>{addFiles([...fi.files]);fi.value='';});
+
+function addFiles(list){list.filter(f=>/\.(xlsx|xls)$/i.test(f.name)).forEach(f=>{if(!files.find(u=>u.name===f.name))files.push(f);});renderList();}
+
+function renderList(){
+  fl.innerHTML='';
+  files.forEach((f,i)=>{
+    const{mode,name,rawName,displayName,type}=getMode(f.name);
+    const isXls=/\.xls$/i.test(f.name);
+    const mt=mode==='tax'?'<span class="mt tax">세금계산서</span>':mode==='withhold'?'<span class="mt wit">원천세</span>':mode==='skip'?'<span class="mt skip">스킵</span>':'<span class="mt unk">미등록</span>';
+    const xt=type?`<span class="xt calc">${type}</span>`:'<span class="xt unk2">?</span>';
+    const el=document.createElement('div');
+    el.className='fi'+(mode==='skip'?' dim':mode==='unknown'?' warn':'');
+    el.innerHTML=`<div class="fic"><svg viewBox="0 0 24 24" stroke-linecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zM14 2v6h6"/></svg></div><div class="fn" title="${f.name}">${displayName||name||f.name}</div>${xt}${mt}<span class="xt ${isXls?'xls':'xlsx'}">${isXls?'XLS':'XLSX'}</span><div class="fsz">${(f.size/1024).toFixed(1)}K</div><button class="frm" data-i="${i}">×</button>`;
+    fl.appendChild(el);
+  });
+  fl.querySelectorAll('.frm').forEach(b=>b.addEventListener('click',()=>{files.splice(+b.dataset.i,1);renderList();}));
+  const tc=files.filter(f=>getMode(f.name).mode==='tax').length,wc=files.filter(f=>getMode(f.name).mode==='withhold').length,sc=files.filter(f=>getMode(f.name).mode==='skip').length,uc=files.filter(f=>getMode(f.name).mode==='unknown').length;
+  document.getElementById('cnt').innerHTML=(tc?`<span class="cb tax">세금계산서 ${tc}</span>`:'')+( wc?`<span class="cb wit">원천세 ${wc}</span>`:'')+( sc?`<span class="cb skip">스킵 ${sc}</span>`:'')+( uc?`<span class="cb unk">미등록 ${uc}</span>`:'');
+  rb.disabled=files.length===0||(tc+wc)===0;
+}
+
+function log(m,c){lb.classList.remove('hidden');const d=document.createElement('div');d.className=c;d.textContent='▸ '+m;lb.appendChild(d);lb.scrollTop=lb.scrollHeight;}
+
+rb.addEventListener('click',async()=>{
+  if(!files.length)return;
+  lb.innerHTML='';lb.classList.remove('hidden');results=[];rl.innerHTML='';rw.classList.remove('hidden');da.classList.add('hidden');rb.disabled=true;rb.innerHTML='<span>처리 중...</span>';
+  let ok=0,fail=0,skip=0;
+  for(const file of files){
+    const{mode,name,rawName,displayName,type}=getMode(file.name);
+    if(mode==='skip'){log(`[${name}] 스킵 (${type})`,'sk');results.push({name:file.name,displayName:name,type,mode,ok:false,skip:true});skip++;continue;}
+    if(mode==='unknown'){log(`[${name||file.name}] ✗ 업체를 찾을 수 없습니다`,'er');results.push({name:file.name,displayName:name||file.name,type:'미등록',mode,ok:false,skip:false,detail:'CSV에 없는 업체'});fail++;continue;}
+    const hwnRows=getHwn(rawName);
+    const hl=hwnRows?` + 환수 ${hwnRows.length}건`:'';
+    log(`[${name}] ${type} → ${mode==='tax'?'세금계산서':'원천세'}${hl} 처리 시작`,'in');
+    try{
+      const{blob,supplyVal,totalNet}=mode==='tax'?await processTax(file,hwnRows):await processWit(file,hwnRows);
+      const prefix=type||(mode==='tax'?'세금계산서':'원천세');
+      const docType=(totalNet<0||supplyVal<0)?'환수내역서':'정산내역서';
+      const outName=prefix+'_'+rawName+'-'+docType+'.xlsx';
+      results.push({name:outName,displayName:name,type,mode,blob,ok:true});
+      ok++;log(`[${name}] ✓ 완료`,'ok');
+    }catch(e){results.push({name:file.name,displayName:name,type,mode,ok:false,skip:false,detail:e.message});fail++;log(`[${name}] ✗ ${e.message}`,'er');}
+  }
+  // 환수파일에만 있고 정산서 업로드 없는 협력점 → 환수 전용 파일 생성
+  if(Object.keys(HWNSOO_MAP).length>0){
+    const uploadedNorms=new Set(files.map(f=>{const{rawName}=getMode(f.name);return rawName?stripSym(rawName):'';}).filter(Boolean));
+    for(const[norm,hwnRows] of Object.entries(HWNSOO_MAP)){
+      // 이미 정산서로 처리된 협력점은 건너뜀
+      if([...uploadedNorms].some(u=>u===norm||u.includes(norm)||norm.includes(u))) continue;
+      // PARTNER_MAP에서 해당 협력점 type 찾기
+      const rawP=HWNSOO_RAW[norm]||norm;
+      const cleanP=stripSym(rawP);
+      // 이름 매칭
+      let type=null,pName=null;
+      for(const[k,v] of Object.entries(PARTNER_MAP)){
+        if(stripSym(k)===cleanP||cleanP.includes(stripSym(k))||stripSym(k).includes(cleanP)){type=v;pName=k;break;}
+      }
+      let mode='unknown';
+      if(type==='정발행'||type==='역발행') mode='tax';
+      else if(type==='원천세') mode='withhold';
+      if(mode==='unknown'){log(`[환수전용] ${cleanP} ✗ 업체 DB에 없음`,'er');fail++;continue;}
+      log(`[환수전용] ${cleanP} → ${type} 환수내역서 생성`,'in');
+      try{
+        const{blob}=await processHwnOnly(rawP,hwnRows,mode==='tax'?'tax':'wit',type);
+        const outName=(type||mode)+'_'+rawP+'-환수내역서.xlsx';
+        results.push({name:outName,displayName:cleanP,type,mode,blob,ok:true});
+        ok++;log(`[환수전용] ${cleanP} ✓ 완료`,'ok');
+      }catch(e){fail++;log(`[환수전용] ${cleanP} ✗ ${e.message}`,'er');}
+    }
+  }
+  sb.innerHTML=`<span class="sv">${files.length}</span><span class="slb">개 처리&nbsp;</span><span class="sv" style="color:var(--ok)">${ok}</span><span class="slb">완료&nbsp;</span>${fail?`<span class="sv" style="color:var(--er)">${fail}</span><span class="slb">실패&nbsp;</span>`:''}${skip?`<span class="sv" style="color:var(--t3)">${skip}</span><span class="slb">스킵</span>`:''}`;
+  const groups=[{l:'세금계산서',m:'tax',c:'tax'},{l:'원천세',m:'withhold',c:'wit'},{l:'실패/스킵',m:null,c:'fail'}];
+  for(const g of groups){const items=g.m?results.filter(r=>r.mode===g.m):results.filter(r=>!r.ok);if(!items.length)continue;const h=document.createElement('div');h.className='rg-hdr '+g.c;h.textContent=g.l+' '+items.length+'건';rl.appendChild(h);items.forEach(r=>{const el=document.createElement('div');el.className='ri '+(r.ok?'ok':r.skip?'sk':'ng');const idx=results.indexOf(r);el.innerHTML=`<div class="rs ${r.ok?'ok':r.skip?'sk':'ng'}"><svg viewBox="0 0 24 24" stroke-linecap="round">${r.ok?'<path d="M20 6L9 17l-5-5"/>':r.skip?'<path d="M5 12h14"/>':'<path d="M18 6L6 18M6 6l12 12"/>'}</svg></div><div class="rinfo"><div class="rn" title="${r.name}">${r.displayName||r.name}</div><div class="rd">${r.type||''}${r.detail?' · '+r.detail:''}</div></div>${r.ok?`<button class="db" data-i="${idx}"><svg viewBox="0 0 24 24" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>저장</button>`:''}`;rl.appendChild(el);});}
+  rl.querySelectorAll('.db').forEach(b=>b.addEventListener('click',()=>dlOne(+b.dataset.i)));
+  if(ok>=1)da.classList.remove('hidden');
+  rb.disabled=false;rb.innerHTML='<svg viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>가공 실행';
+});
+
+da.addEventListener('click',async()=>{
+  const ol=results.map((r,i)=>({...r,i})).filter(r=>r.ok);if(!ol.length)return;
+  da.disabled=true;const oh=da.innerHTML;da.innerHTML='<span>준비 중...</span>';
+  try{if(window.showSaveFilePicker){const t=new Date();const mm=String(t.getMonth()+1).padStart(2,'0'),dd=String(t.getDate()).padStart(2,'0');const fh=await window.showSaveFilePicker({suggestedName:'가공_'+mm+dd+'.zip',types:[{description:'ZIP',accept:{'application/zip':['.zip']}}]});const w=await fh.createWritable();const zf={};for(const r of ol){const ab=await r.blob.arrayBuffer();zf[r.name]=[new Uint8Array(ab),{level:0}];}await w.write(fflate.zipSync(zf));await w.close();}else{let d=0;ol.forEach(r=>{setTimeout(()=>dlOne(r.i),d);d+=700;});}}
+  catch(e){if(e.name!=='AbortError')alert('저장 실패: '+e.message);}
+  da.disabled=false;da.innerHTML=oh;
+});
+
+function dlOne(i){const r=results[i];if(!r?.ok)return;const url=URL.createObjectURL(r.blob);const a=document.createElement('a');a.href=url;a.download=r.name;document.body.appendChild(a);a.click();document.body.removeChild(a);setTimeout(()=>URL.revokeObjectURL(url),3000);}
+</script>
+<script src="assets/config.js"></script>
+<script>
+/* ═══════════════════════════════════════════
+   업체 통합 관리앱(메인 DB) 자동 연동
+   - 메인앱 로그인 토큰이 있으면 메인 DB의 계산서형태를 불러와
+     내장/CSV DB 위에 덮어씀 (내장 DB는 fallback으로 유지)
+   ═══════════════════════════════════════════ */
+(function () {
+  // 헤더에 메인앱 바로가기
+  var hdr = document.querySelector('.hdr');
+  if (hdr) {
+    var a = document.createElement('a');
+    a.href = 'index.html';
+    a.textContent = '← 업체 관리앱';
+    a.style.cssText = 'margin-left:auto;font-size:13px;color:#2563eb;text-decoration:none;font-weight:600;white-space:nowrap';
+    hdr.appendChild(a);
+  }
+
+  var CFG = window.APP_CONFIG || {};
+  if (!CFG.API_URL) return;
+  var token = '';
+  try { token = localStorage.getItem('partner_token') || ''; } catch (e) {}
+  var badge = document.getElementById('csvBadge'), msg = document.getElementById('csvMsg');
+  if (!token) {
+    if (msg) msg.innerHTML = '💡 <a href="index.html">업체 관리앱</a>에 로그인해 두면 메인 DB의 계산서방식을 자동으로 불러옵니다 (지금은 내장/CSV DB 사용 중)';
+    return;
+  }
+  fetch(CFG.API_URL + '?action=list&token=' + encodeURIComponent(token))
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (!d.ok) throw new Error(d.error || 'list 실패');
+      var map = {}, n = 0;
+      (d.companies || []).forEach(function (c) {
+        var name = String(c['업체명'] || '').trim();
+        var t = String(c['계산서형태'] || '').trim();
+        if (name && t) { map[name] = t; n++; }
+      });
+      if (!n) {
+        if (msg) msg.innerHTML = '메인 DB에 계산서형태 데이터가 아직 없습니다 — 업체 관리앱에서 <b>[②③ 데이터 병합]</b>을 먼저 실행하세요 (내장 DB 사용 중)';
+        return;
+      }
+      Object.assign(PARTNER_MAP, map); // 내장 DB 위에 메인 DB 값을 덮어씀
+      var total = Object.keys(PARTNER_MAP).length;
+      if (badge) { badge.textContent = '메인 DB 연동 (' + n + '개) 🔗'; badge.className = 'csv-badge saved'; }
+      if (msg) { msg.innerHTML = '<b>업체 통합 관리앱 메인 DB</b>에서 ' + n + '개 업체의 계산서방식을 불러왔습니다 (전체 ' + total + '개)'; msg.className = 'csv-msg ok'; }
+      if (typeof renderList === 'function') renderList();
+    })
+    .catch(function (e) {
+      if (msg) msg.innerHTML = '메인 DB 연동 실패(' + e.message + ') — 내장/CSV DB로 동작합니다';
+    });
+})();
+</script>
+</html>
