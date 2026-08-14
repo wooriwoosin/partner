@@ -40,6 +40,9 @@ var HEADERS = [
   '출처', '수정일시'
 ];
 
+// 이름이 바뀐 컬럼 (새 이름 → 옛 이름). 시트정리 시 옛 이름 값을 새 이름으로 이어받는다.
+var RENAMED_COLS = { '위탁판매': '계약서1', '개인정보': '계약서2' };
+
 // 더 이상 쓰지 않는 옛 컬럼 (시트정리() 실행 시 제거)
 var LEGACY_COLS = [
   '웹활용', '직접접수', '접수대행', '유선접수전달', '유선개통전달',
@@ -480,6 +483,91 @@ function 계정추가_직접(id, pw, name, role) {
 function setup() { dataSheet_(); userSheet_(); return 'ok'; }
 
 /* ============================================================
+ * 계약복구() — 위탁판매/개인정보 값 되살리기
+ * ------------------------------------------------------------
+ * 시트정리() 실행 시점에 헤더가 아직 옛 이름(계약서1/계약서2)이면
+ * 새 이름(위탁판매/개인정보)으로 값을 찾지 못해 빈칸이 됩니다.
+ * ① 업체관리_백업_* 탭에서 id로 정확히 복구하고,
+ * ② 그래도 빈 곳은 ③전자계약서 원본에서 업체명으로 채웁니다.
+ * 이미 값이 있는 칸은 건드리지 않습니다.
+ * ============================================================ */
+function 계약복구() {
+  var lock = LockService.getScriptLock(); lock.waitLock(60000);
+  try {
+    var sh = dataSheet_();
+    var rows = readAll_();
+    var fromBackup = 0, fromSource = 0, bkName = '(없음)';
+
+    // 1) 백업 탭에서 id 기준 복구
+    var backups = ss_().getSheets().filter(function (s) {
+      return s.getName().indexOf(SHEET_NAME + '_백업_') === 0;
+    });
+    if (backups.length) {
+      backups.sort(function (a, b) { return a.getName() < b.getName() ? 1 : -1; }); // 최신 백업 우선
+      var bk = backups[0];
+      bkName = bk.getName();
+      var bhdr = sheetHeader_(bk);
+      var blast = bk.getLastRow();
+      if (blast > 1) {
+        var bvals = bk.getRange(2, 1, blast - 1, bhdr.length).getValues();
+        var byId = {};
+        bvals.forEach(function (r) {
+          var o = {}; bhdr.forEach(function (h, i) { if (h) o[h] = r[i]; });
+          if (o.id !== undefined && String(o.id).trim() !== '') byId[String(o.id)] = o;
+        });
+        rows.forEach(function (r) {
+          var b = byId[String(r.id)];
+          if (!b) return;
+          var wt = pick_(b['위탁판매'], b['계약서1']);
+          var pi = pick_(b['개인정보'], b['계약서2']);
+          var did = false;
+          if (String(r['위탁판매'] || '') === '' && wt !== '') { r['위탁판매'] = wt; did = true; }
+          if (String(r['개인정보'] || '') === '' && pi !== '') { r['개인정보'] = pi; did = true; }
+          if (did) fromBackup++;
+        });
+      }
+    }
+
+    // 2) 아직 빈 곳은 ③ 전자계약서 원본에서 업체명으로 복구
+    var con = readSrc_(SRC_CONTRACT, ['name', 'c1']);
+    if (con.rows.length) {
+      var byName = {};
+      con.rows.forEach(function (r) {
+        var k = normName_(r['name']);
+        if (k && !byName[k]) byName[k] = r;
+      });
+      rows.forEach(function (r) {
+        if (String(r['위탁판매'] || '') !== '') return;
+        var src = byName[normName_(r['업체명'])] || byName[normName_(r['소속원문'])];
+        if (!src) return;
+        r['위탁판매'] = toYN_(src['c1']) || 'N';
+        r['개인정보'] = toYN_(src['c2']) || 'N';
+        if (String(r['사업자등록증'] || '') === '') r['사업자등록증'] = toYN_(src['bizDoc']) || 'N';
+        if (String(r['계약제외'] || '') === '') r['계약제외'] = toYN_(src['excluded']) || 'N';
+        if (String(r['계약비고'] || '') === '') r['계약비고'] = String(src['note'] || '');
+        fromSource++;
+      });
+    }
+
+    var hdr = sheetHeader_(sh);
+    var out = rows.map(function (r) { return rowFromObj_(r, hdr); });
+    if (out.length) sh.getRange(2, 1, out.length, hdr.length).setValues(out);
+
+    var msg = '계약 정보 복구 완료\n'
+      + ' · 백업 탭(' + bkName + ')에서 복구: ' + fromBackup + '개\n'
+      + ' · ③전자계약서 원본에서 복구: ' + fromSource + '개\n'
+      + ' · 총 업체: ' + rows.length + '개';
+    Logger.log(msg);
+    return msg;
+  } finally { lock.releaseLock(); }
+}
+function pick_(a, b) {
+  if (a !== undefined && String(a).trim() !== '') return String(a).trim();
+  if (b !== undefined && String(b).trim() !== '') return String(b).trim();
+  return '';
+}
+
+/* ============================================================
  * 헤더복구() — 구버전 배포가 헤더 행을 옛 이름으로 덮어썼을 때 복구
  * ------------------------------------------------------------
  * 데이터 행은 그대로 두고 1행(헤더)만 올바른 이름으로 되돌립니다.
@@ -554,13 +642,19 @@ function 시트정리() {
     var backupName = SHEET_NAME + '_백업_' + stamp;
     sh.copyTo(ss).setName(backupName);
 
-    // 2) 행 → 객체 (이름 기준)
+    // 2) 행 → 객체 (이름 기준) + 옛 이름으로 저장된 값 이어받기
     var idIdx = hdr.indexOf('id');
     var rows = [];
     values.forEach(function (r) {
       if (String(idIdx >= 0 ? r[idIdx] : r[0]).trim() === '') return;
       var o = {};
       hdr.forEach(function (h, i) { if (h) o[h] = r[i]; });
+      // 컬럼 이름이 바뀐 항목은 옛 이름 값을 새 이름으로 옮긴다 (값 유실 방지)
+      for (var nw in RENAMED_COLS) {
+        if (String(o[nw] || '') === '' && String(o[RENAMED_COLS[nw]] || '') !== '') {
+          o[nw] = o[RENAMED_COLS[nw]];
+        }
+      }
       rows.push(o);
     });
 
