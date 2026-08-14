@@ -11,6 +11,19 @@
   } catch (e) {}
   function isAdmin() { return ROLE === 'admin'; }
   var SERVER_VER = '';   // 서버(Apps Script)가 알려주는 코드 버전
+  // 방금 서버에서 받아온 데이터가 최신인지 눈으로 확인할 수 있게 요약 표시
+  function showDataStamp() {
+    var el = document.getElementById('dataStamp');
+    if (!el) return;
+    var sales = STATE.all.filter(function (c) { return c.업체구분 === '판매점'; });
+    var mkO = sales.filter(function (c) { return c.전달마커 === 'O'; }).length;
+    var wN = sales.filter(function (c) { return c.웹접수 === 'N' && c.웹회신 === 'N'; }).length;
+    var t = new Date();
+    var hh = ('0' + t.getHours()).slice(-2), mm = ('0' + t.getMinutes()).slice(-2), ss = ('0' + t.getSeconds()).slice(-2);
+    el.textContent = '데이터 ' + hh + ':' + mm + ':' + ss + ' 기준 · 판매점 ' + sales.length +
+      '개 중 마커O ' + mkO + ' · 웹접수·회신 N ' + wN;
+  }
+
   function checkServerVersion() {
     var el = document.getElementById('verWarn');
     if (el) el.style.display = (LIVE && !SERVER_VER) ? '' : 'none';
@@ -1002,7 +1015,7 @@
     $('#logWrap').style.display = isLog ? '' : 'none';
     if (settle) {
       var f = $('#settleFrame');
-      if (!f.getAttribute('src')) f.setAttribute('src', 'settle.html');
+      if (!f.getAttribute('src')) f.setAttribute('src', 'settle.html?v=20260815a');
       return;
     }
     if (isLog) { loadLogs(); return; }
@@ -1043,6 +1056,7 @@
       checkServerVersion();
       populateSymFilter();
       applyFilter();
+      showDataStamp();
     }).catch(function (e) {
       if (/unauthorized/i.test(e.message)) { forceLogin('세션이 만료됐어요. 다시 로그인해 주세요.'); return; }
       $('#tbody').innerHTML = '<tr><td colspan="' + VIEW_COLS[VIEW] + '" class="empty">불러오기 실패: ' + esc(e.message) + '</td></tr>';
