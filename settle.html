@@ -159,6 +159,7 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg);colo
         <div class="dic"><svg viewBox="0 0 24 24" stroke-linecap="round" fill="none" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg></div>
         <div class="dl">xlsx / xls 파일 드래그 또는 클릭</div>
         <div class="dh">여러 파일 한번에 업로드 → 업체별 계산서 방식 자동 감지</div>
+        <div class="dh" style="margin-top:4px">파일명 예) <b>웨이팅-정산내역서.xlsx</b> · <b>보라네트워크(영웅) 정산내역서.xlsx</b> (업체명이 앞, 뒤에 "정산내역서")</div>
       </div>
       <div class="fl" id="fl"></div>
       <div class="sr">
@@ -201,7 +202,7 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg);colo
             <span>xlsx 업로드</span>
             <input type="file" id="hwnFi" accept=".xlsx,.xls">
           </label>
-          <div class="hwn-msg" id="hwnMsg">전체정산관리 xlsx · 협력점별 자동 분류</div>
+          <div class="hwn-msg" id="hwnMsg">전체정산관리 xlsx <b>1개</b>만 올리세요 · <b>파일명 규칙 없음</b> — 파일 안의 "협력점" 열을 읽어 업체별로 자동 분배합니다</div>
         </div>
         <div class="hwn-chips hidden" id="hwnChips"></div>
       </div>
@@ -409,7 +410,7 @@ document.getElementById('hwnReset').addEventListener('click', () => {
   HWNSOO_MAP={}; HWNSOO_RAW={}; HWNSOO_SCHEMA=null;
   document.getElementById('hwnBadge').textContent='미업로드';
   document.getElementById('hwnBadge').className='hwn-badge';
-  document.getElementById('hwnMsg').textContent='전체정산관리 xlsx · 협력점별 자동 분류';
+  document.getElementById('hwnMsg').innerHTML='전체정산관리 xlsx <b>1개</b>만 올리세요 · <b>파일명 규칙 없음</b> — 파일 안의 "협력점" 열을 읽어 업체별로 자동 분배합니다';
   document.getElementById('hwnMsg').className='hwn-msg';
   document.getElementById('hwnChips').innerHTML='';
   document.getElementById('hwnChips').classList.add('hidden');

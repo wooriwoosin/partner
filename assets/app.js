@@ -260,6 +260,22 @@
     return '미진행';
   }
 
+  // 계약상태는 저장되는 값이 아니라 아래 항목들로 자동 판정됩니다.
+  var CON_RULE = '계약제외 Y → <b>제외</b> · 위탁판매 빈칸 → <b>정보없음</b> · 위탁판매 Y +\u200b 개인정보 Y → <b>완료</b>'
+    + ' · 계약비고에 "만료" 포함 → <b>만료</b> · 둘 중 하나만 Y → <b>진행중</b> · 그 외 → <b>미진행</b>'
+    + '<br><span style="color:var(--muted)">※ 보증보험은 일부 업체만 진행하므로 계약상태에 영향을 주지 않습니다.</span>';
+  function renderConState() {
+    var box = document.getElementById('conStateBox');
+    if (!box) return;
+    var cur = {
+      위탁판매: $('#f_wt').value, 개인정보: $('#f_pi').value,
+      계약제외: $('#f_cexc').value, 계약비고: $('#f_connote').value
+    };
+    var st = conState(cur);
+    box.innerHTML = '현재 계약상태 <span class="chip ' + (CON_CHIP[st] || '') + '" style="font-size:12px">' + st + '</span>'
+      + ' <span style="color:var(--muted)">— 아래 항목을 바꾸면 자동으로 다시 판정됩니다</span><br>' + CON_RULE;
+  }
+
   function computeStats() {
     var s = { total: STATE.all.length, 판매점: 0, 협력점: 0, 휴면: 0, 정발행: 0, 역발행: 0, 원천세: 0, 계약완료: 0 };
     STATE.all.forEach(function (c) {
@@ -462,6 +478,7 @@
     $('#f_connote').value = c.계약비고 || '';
     $('#deleteBtn').style.display = id ? 'inline-block' : 'none';
     if (sec === 'base') updatePreview();
+    if (sec === 'contract') renderConState();
     $('#overlay').classList.add('open');
   }
   function closeModal() { $('#overlay').classList.remove('open'); }
@@ -935,6 +952,10 @@
     $('#deleteBtn').addEventListener('click', deleteCompany);
     $('#f_soan').addEventListener('blur', autofillFromSoan);
     $('#autofillBtn').addEventListener('click', autofillFromSoan);
+    ['#f_wt', '#f_pi', '#f_cexc'].forEach(function (sel) {
+      $(sel).addEventListener('change', renderConState);
+    });
+    $('#f_connote').addEventListener('input', renderConState);
     $('#f_gubun').addEventListener('change', reapplyDefaults);
     $('#f_marker').addEventListener('change', reapplyDefaults);
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeModal(); });
