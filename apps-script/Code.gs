@@ -206,6 +206,7 @@ function doPost(e) {
     if (action === 'upsert') { requireAuth_(body.token); return json_(upsert_(body.company)); }
     if (action === 'delete') { requireAuth_(body.token); return json_(remove_(body.id)); }
     if (action === 'bulkImport') { requireAuth_(body.token); return json_(bulkImport_(body.companies, body.replace)); }
+    if (action === 'merge') { requireAuth_(body.token); return json_({ ok: true, summary: 병합실행() }); }
     if (action === 'listUsers') { requireAuth_(body.token); return json_({ ok: true, users: usersPublic_() }); }
     if (action === 'createUser') { requireAuth_(body.token); return json_(createUser_(body.id, body.pw, body.name, body.role)); }
     if (action === 'deleteUser') { requireAuth_(body.token); return json_(deleteUser_(body.id)); }
@@ -300,28 +301,41 @@ function toYN_(v) {
   if (v === false || v === 'FALSE' || v === 'false' || v === 'N' || v === 'n') return 'N';
   return v ? String(v) : '';
 }
-function readSrc_(fileId) {
-  var sh = SpreadsheetApp.openById(fileId).getSheets()[0];
-  var values = sh.getDataRange().getValues();
-  if (values.length < 2) return [];
-  var header = values[0].map(function (h) { return String(h).trim(); });
-  var out = [];
-  for (var i = 1; i < values.length; i++) {
-    if (values[i].every(function (c) { return c === '' || c === null; })) continue;
-    var o = {};
-    header.forEach(function (h, j) { if (h) o[h] = values[i][j]; });
-    out.push(o);
+// 소스 스프레드시트의 "모든 탭"을 뒤져서, 필수 헤더가 들어있는 행을 찾아 데이터를 읽는다.
+// (데이터가 첫 탭이 아니거나 헤더가 1행이 아니어도 동작)
+function readSrc_(fileId, requiredHeaders) {
+  var sheets = SpreadsheetApp.openById(fileId).getSheets();
+  for (var s = 0; s < sheets.length; s++) {
+    var values = sheets[s].getDataRange().getValues();
+    var scan = Math.min(values.length, 10);
+    for (var h = 0; h < scan; h++) {
+      var header = values[h].map(function (x) { return String(x).trim(); });
+      var hit = requiredHeaders.every(function (rq) { return header.indexOf(rq) >= 0; });
+      if (!hit) continue;
+      var out = [];
+      for (var i = h + 1; i < values.length; i++) {
+        if (values[i].every(function (c) { return c === '' || c === null; })) continue;
+        var o = {};
+        header.forEach(function (hd, j) { if (hd) o[hd] = values[i][j]; });
+        out.push(o);
+      }
+      return { rows: out, sheet: sheets[s].getName(), headerRow: h + 1 };
+    }
   }
-  return out;
+  return { rows: [], sheet: '(헤더 못찾음: ' + requiredHeaders.join(',') + ')', headerRow: 0 };
 }
 
 function 병합실행() {
   var lock = LockService.getScriptLock(); lock.waitLock(60000);
   try {
     var rows = readAll_();               // 메인 DB 현재 데이터
-    var invoice = readSrc_(SRC_INVOICE); // ②
-    var contract = readSrc_(SRC_CONTRACT); // ③
+    var inv = readSrc_(SRC_INVOICE, ['협력점명', '계산서형태']);   // ②
+    var con = readSrc_(SRC_CONTRACT, ['name', 'c1']);              // ③
+    var invoice = inv.rows;
+    var contract = con.rows;
     var issues = [];
+    if (!invoice.length) issues.push(['소스오류', '② 계산서방식', '데이터를 못 읽음 — ' + inv.sheet]);
+    if (!contract.length) issues.push(['소스오류', '③ 전자계약서', '데이터를 못 읽음 — ' + con.sheet]);
     var byKey = {};
     var added2 = 0, added3 = 0, filled2 = 0, filled3 = 0;
 
@@ -418,8 +432,8 @@ function 병합실행() {
     writeMergeReport_(rows, issues);
 
     var msg = '병합 완료: 총 ' + rows.length + '개 업체'
-      + ' | ② 매칭 ' + filled2 + ' · 신규 ' + added2
-      + ' | ③ 매칭 ' + filled3 + ' · 신규 ' + added3
+      + ' | ②(' + inv.sheet + '탭 ' + invoice.length + '행) 매칭 ' + filled2 + ' · 신규 ' + added2
+      + ' | ③(' + con.sheet + '탭 ' + contract.length + '행) 매칭 ' + filled3 + ' · 신규 ' + added3
       + ' | 확인필요 ' + issues.length + '건 → "' + REPORT_SHEET + '" 탭 확인';
     Logger.log(msg);
     return msg;

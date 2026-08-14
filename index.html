@@ -33,6 +33,8 @@
       <button id="logoutBtn" class="btn ghost sm">로그아웃</button>
       <button id="reloadBtn" class="btn ghost sm">새로고침</button>
       <button id="importBtn" class="btn ghost sm" style="display:none">시트에 초기데이터 넣기</button>
+      <button id="mergeBtn" class="btn ghost sm" style="display:none">②③ 데이터 병합</button>
+      <button id="uploadBtn" class="btn ghost sm" style="display:none">📤 개통리스트 업로드</button>
       <button id="addBtn" class="btn primary">+ 신규 업체</button>
     </header>
 
@@ -62,13 +64,25 @@
         <option value="활성">활성</option>
         <option value="보류">보류(정리대상)</option>
       </select>
-      <select id="fltInv" title="계산서형태">
+      <select id="fltInv" title="계산서형태" style="display:none">
         <option value="">계산서(전체)</option>
         <option value="정발행">정발행</option>
         <option value="역발행">역발행</option>
         <option value="원천세">원천세</option>
         <option value="기타">기타</option>
         <option value="__none">계산서정보 없음</option>
+      </select>
+      <select id="fltSym" title="기호" style="display:none">
+        <option value="">기호(전체)</option>
+      </select>
+      <select id="fltCon" title="계약상태" style="display:none">
+        <option value="">계약상태(전체)</option>
+        <option value="완료">계약완료</option>
+        <option value="진행중">진행중(일부 서명)</option>
+        <option value="미진행">미진행</option>
+        <option value="만료">만료</option>
+        <option value="제외">제외</option>
+        <option value="정보없음">계약정보 없음</option>
       </select>
       <button id="resetBtn" class="btn ghost sm">필터 초기화</button>
       <span id="count" class="count"></span>
@@ -259,8 +273,42 @@
     </div>
   </div>
 
+  <!-- 개통리스트 업로드 모달 -->
+  <div id="uploadOverlay" class="overlay">
+    <div class="modal" style="max-width:780px">
+      <header>
+        <h3>📤 개통리스트 업로드 — 신규 업체 자동 등록</h3>
+        <button id="closeUpload" class="x">×</button>
+      </header>
+      <div class="body">
+        <div class="field full">
+          <label>지난주 개통리스트 엑셀(.xlsx / .csv)을 선택하세요</label>
+          <input type="file" id="upFile" accept=".xlsx,.xls,.csv" />
+          <span class="hint">'소속'(기호 포함 원문) 열을 자동으로 찾고, 기존 업체와 중복은 자동으로 걸러냅니다.</span>
+        </div>
+        <div class="field full" id="upColWrap" style="display:none">
+          <label>업체(소속) 열을 직접 선택해 주세요</label>
+          <select id="upCol"></select>
+        </div>
+        <div id="upSummary" class="preview-box" style="display:none; margin-top:10px"></div>
+        <div class="table-wrap" id="upTableWrap" style="display:none; margin-top:10px; max-height:320px; overflow-y:auto">
+          <table style="min-width:0">
+            <thead><tr><th style="width:36px"><input type="checkbox" id="upAll" checked /></th><th>소속(원문)</th><th>업체명</th><th>구분(자동)</th></tr></thead>
+            <tbody id="upTbody"></tbody>
+          </table>
+        </div>
+      </div>
+      <footer>
+        <div class="spacer"></div>
+        <button id="upCancel" class="btn ghost">닫기</button>
+        <button id="upSave" class="btn primary" disabled>선택 업체 등록</button>
+      </footer>
+    </div>
+  </div>
+
   <div id="toast"></div>
 
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="assets/config.js"></script>
   <script src="assets/app.js"></script>
 </body>
