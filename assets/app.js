@@ -3,8 +3,13 @@
   'use strict';
   var CFG = window.APP_CONFIG || {};
   var LIVE = !!CFG.API_URL;
-  var TOKEN = '', USER = '';
-  try { TOKEN = localStorage.getItem('partner_token') || ''; USER = localStorage.getItem('partner_user') || ''; } catch (e) {}
+  var TOKEN = '', USER = '', ROLE = '';
+  try {
+    TOKEN = localStorage.getItem('partner_token') || '';
+    USER = localStorage.getItem('partner_user') || '';
+    ROLE = localStorage.getItem('partner_role') || '';
+  } catch (e) {}
+  function isAdmin() { return ROLE === 'admin'; }
 
   /* ============ 분류 엔진 (build_seed.py 와 동일 규칙) ============ */
   var SALES_SYMS = ['■■', '□□', '■', '□'];
@@ -106,7 +111,7 @@
   function enterApp() {
     $('#authScreen').style.display = 'none';
     $('#appWrap').style.display = '';
-    $('#userName').textContent = USER ? ('● ' + USER) : '';
+    $('#userName').textContent = USER ? ('● ' + USER + (isAdmin() ? ' (어드민)' : ' (스태프)')) : '';
     $('#userName').className = 'badge-mode live';
     $('#usersBtn').style.display = LIVE ? 'inline-block' : 'none';
     load();
@@ -116,17 +121,53 @@
   function openUsers() {
     $('#usersOverlay').classList.add('open');
     $('#nu_msg').textContent = '';
+    $('#mp_msg').textContent = '';
+    $('#mp_old').value = ''; $('#mp_new').value = '';
+    applyRoleUI();
     $('#usersTbody').innerHTML = '<tr><td colspan="5" class="empty"><span class="spin"></span></td></tr>';
-    apiPost({ action: 'listUsers' }).then(function (d) { renderUsers(d.users || []); })
-      .catch(function (e) { $('#usersTbody').innerHTML = '<tr><td colspan="5" class="empty">' + esc(e.message) + '</td></tr>'; });
+    // 권한은 서버(시트) 값이 최종 기준 — 오래된 로그인 세션도 여기서 교정된다
+    apiPost({ action: 'listUsers' }).then(function (d) {
+      if (d.role) {
+        ROLE = d.role;
+        try { localStorage.setItem('partner_role', ROLE); } catch (e) {}
+        $('#userName').textContent = USER ? ('● ' + USER + (isAdmin() ? ' (어드민)' : ' (스태프)')) : '';
+        applyRoleUI();
+      }
+      if (isAdmin()) renderUsers(d.users || []);
+    }).catch(function (e) { $('#usersTbody').innerHTML = '<tr><td colspan="5" class="empty">' + esc(e.message) + '</td></tr>'; });
+  }
+
+  // 어드민 전용 영역 표시/숨김
+  function applyRoleUI() {
+    var admin = isAdmin();
+    $$('.admin-only').forEach(function (el) { el.style.display = admin ? '' : 'none'; });
+    $('#staffNote').style.display = admin ? 'none' : '';
+  }
+
+  function changeMyPw() {
+    var oldPw = $('#mp_old').value, newPw = $('#mp_new').value;
+    if (!oldPw || !newPw) { $('#mp_msg').textContent = '현재 비밀번호와 새 비밀번호를 입력하세요'; return; }
+    if (newPw.length < 4) { $('#mp_msg').textContent = '새 비밀번호는 4자 이상이어야 합니다'; return; }
+    $('#mp_save').disabled = true; $('#mp_msg').className = 'auth-msg'; $('#mp_msg').textContent = '변경 중…';
+    apiPost({ action: 'changeMyPw', oldPw: oldPw, newPw: newPw }).then(function () {
+      $('#mp_save').disabled = false;
+      $('#mp_old').value = ''; $('#mp_new').value = '';
+      $('#mp_msg').className = 'auth-msg ok'; $('#mp_msg').textContent = '비밀번호가 변경되었습니다';
+      toast('비밀번호가 변경되었어요', 'ok');
+    }).catch(function (e) {
+      $('#mp_save').disabled = false;
+      $('#mp_msg').className = 'auth-msg'; $('#mp_msg').textContent = e.message;
+    });
   }
   function renderUsers(list) {
     if (!list.length) { $('#usersTbody').innerHTML = '<tr><td colspan="5" class="empty">계정 없음</td></tr>'; return; }
     $('#usersTbody').innerHTML = list.map(function (u) {
       var me = u.아이디 === (localStorage.getItem('partner_user_id') || '');
-      return '<tr><td><b>' + esc(u.아이디) + '</b></td><td>' + esc(u.이름 || '') + '</td><td>' + esc(u.권한 || '') +
-        '</td><td>' + esc(u.상태 || '') + '</td><td>' +
-        (list.length > 1 ? '<button class="btn sm danger del-user" data-id="' + esc(u.아이디) + '">삭제</button>' : '') + '</td></tr>';
+      return '<tr><td><b>' + esc(u.아이디) + '</b>' + (me ? ' <span class="chip inc">나</span>' : '') +
+        '</td><td>' + esc(u.이름 || '') + '</td><td>' + esc(u.권한 === 'admin' ? '어드민' : '스태프') +
+        '</td><td>' + esc(u.상태 || '') + '</td><td style="white-space:nowrap">' +
+        '<button class="btn sm ghost pw-user" data-id="' + esc(u.아이디) + '">비번초기화</button> ' +
+        (list.length > 1 && !me ? '<button class="btn sm danger del-user" data-id="' + esc(u.아이디) + '">삭제</button>' : '') + '</td></tr>';
     }).join('');
     $$('#usersTbody .del-user').forEach(function (b) {
       b.onclick = function () {
@@ -134,6 +175,15 @@
         if (!confirm(id + ' 계정을 삭제할까요?')) return;
         apiPost({ action: 'deleteUser', id: id }).then(function () { toast('삭제됨', 'ok'); openUsers(); })
           .catch(function (e) { toast('삭제 실패: ' + e.message, 'err'); });
+      };
+    });
+    $$('#usersTbody .pw-user').forEach(function (b) {
+      b.onclick = function () {
+        var id = b.getAttribute('data-id');
+        var pw = prompt(id + ' 계정의 새 비밀번호를 입력하세요 (4자 이상)');
+        if (!pw) return;
+        apiPost({ action: 'resetPw', id: id, pw: pw }).then(function () { toast(id + ' 비밀번호가 변경되었어요', 'ok'); })
+          .catch(function (e) { toast('변경 실패: ' + e.message, 'err'); });
       };
     });
   }
@@ -148,8 +198,8 @@
     }).catch(function (e) { $('#nu_add').disabled = false; $('#nu_msg').textContent = e.message; });
   }
   function forceLogin(msg) {
-    TOKEN = ''; USER = '';
-    try { localStorage.removeItem('partner_token'); localStorage.removeItem('partner_user'); } catch (e) {}
+    TOKEN = ''; USER = ''; ROLE = '';
+    try { localStorage.removeItem('partner_token'); localStorage.removeItem('partner_user'); localStorage.removeItem('partner_role'); } catch (e) {}
     showAuth('login');
     if (msg) $('#au_msg').textContent = msg;
   }
@@ -170,8 +220,13 @@
         if (/unknown action/i.test(em)) em = '서버(Apps Script) 배포가 최신 코드가 아니에요. 새 코드로 다시 배포해 주세요.';
         $('#au_msg').textContent = em; return;
       }
-      TOKEN = d.token; USER = d.name || id;
-      try { localStorage.setItem('partner_token', TOKEN); localStorage.setItem('partner_user', USER); localStorage.setItem('partner_user_id', id); } catch (e) {}
+      TOKEN = d.token; USER = d.name || id; ROLE = d.role || 'staff';
+      try {
+        localStorage.setItem('partner_token', TOKEN);
+        localStorage.setItem('partner_user', USER);
+        localStorage.setItem('partner_user_id', id);
+        localStorage.setItem('partner_role', ROLE);
+      } catch (e) {}
       enterApp();
     }).catch(function (e) { $('#au_submit').disabled = false; $('#au_msg').textContent = '연결 실패: ' + e.message; });
   }
@@ -489,6 +544,40 @@
     }).catch(function (e) { toast('삭제 실패: ' + e.message, 'err'); }).then(function () { setBusy(false); });
   }
 
+  /* ============ 변경로그 (이번 주만) ============ */
+  var LOGS = [];
+  function loadLogs() {
+    if (!LIVE) { $('#logTbody').innerHTML = '<tr><td colspan="5" class="empty">데모 모드에서는 로그를 볼 수 없습니다</td></tr>'; return; }
+    $('#logTbody').innerHTML = '<tr><td colspan="5" class="empty"><span class="spin"></span> 불러오는 중…</td></tr>';
+    apiPost({ action: 'logs' }).then(function (d) {
+      LOGS = d.logs || [];
+      renderLogs();
+    }).catch(function (e) {
+      var m = /unknown action/i.test(e.message)
+        ? 'Apps Script 배포가 구버전입니다. 새 Code.gs로 다시 배포해 주세요.'
+        : e.message;
+      $('#logTbody').innerHTML = '<tr><td colspan="5" class="empty">' + esc(m) + '</td></tr>';
+    });
+  }
+  function renderLogs() {
+    var q = $('#logSearch').value.trim().toLowerCase();
+    var rows = LOGS.filter(function (l) {
+      if (!q) return true;
+      return (l.이름 + ' ' + l.아이디 + ' ' + l.작업 + ' ' + l.대상 + ' ' + l.상세).toLowerCase().indexOf(q) >= 0;
+    });
+    if (!rows.length) {
+      $('#logTbody').innerHTML = '<tr><td colspan="5" class="empty">' + (LOGS.length ? '검색 결과가 없습니다' : '이번 주 변경 기록이 없습니다') + '</td></tr>';
+      return;
+    }
+    $('#logTbody').innerHTML = rows.map(function (l) {
+      return '<tr><td style="white-space:nowrap">' + esc(l.일시) + '</td>' +
+        '<td>' + esc(l.이름 || l.아이디) + '</td>' +
+        '<td><span class="chip">' + esc(l.작업) + '</span></td>' +
+        '<td>' + esc(l.대상) + '</td>' +
+        '<td class="log-detail" title="' + esc(l.상세) + '">' + esc(l.상세) + '</td></tr>';
+    }).join('');
+  }
+
   /* ============ 개통리스트 업로드 → 신규 등록 + 기호/소속 현행화 ============ */
   var UP = { grid: [], headerRow: -1, colIdx: -1, candidates: [], changes: [] };
 
@@ -741,17 +830,20 @@
     VIEW = v;
     $$('.tab-btn').forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-view') === v); });
 
-    // 💰 정산변환 탭: settle.html 내장 화면으로 전환
-    var settle = v === 'settle';
-    $('#stats').style.display = settle ? 'none' : '';
-    document.querySelector('.toolbar').style.display = settle ? 'none' : '';
-    $('#mainTableWrap').style.display = settle ? 'none' : '';
+    // 특수 탭(정산변환·변경로그)은 목록 화면을 감춤
+    var settle = v === 'settle', isLog = v === 'log';
+    var special = settle || isLog;
+    $('#stats').style.display = special ? 'none' : '';
+    document.querySelector('.toolbar').style.display = special ? 'none' : '';
+    $('#mainTableWrap').style.display = special ? 'none' : '';
     $('#settleWrap').style.display = settle ? '' : 'none';
+    $('#logWrap').style.display = isLog ? '' : 'none';
     if (settle) {
       var f = $('#settleFrame');
       if (!f.getAttribute('src')) f.setAttribute('src', 'settle.html');
       return;
     }
+    if (isLog) { loadLogs(); return; }
 
     // 탭별 필터 노출: 기본=마커/웹활용 · 계산서=기호/계산서형태 · 계약=계약상태
     $('#fltMarker').style.display = v === 'base' ? '' : 'none';
@@ -851,6 +943,11 @@
     $('#closeUsers2').addEventListener('click', function () { $('#usersOverlay').classList.remove('open'); });
     $('#usersOverlay').addEventListener('click', function (e) { if (e.target === this) this.classList.remove('open'); });
     $('#nu_add').addEventListener('click', addUser);
+    $('#mp_save').addEventListener('click', changeMyPw);
+
+    // 변경로그
+    $('#logSearch').addEventListener('input', renderLogs);
+    $('#logReload').addEventListener('click', loadLogs);
 
     startAuthGate();
   });

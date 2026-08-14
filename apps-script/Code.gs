@@ -13,6 +13,8 @@
 var SPREADSHEET_ID = '1shhA5RdXP7DiaMIyR33bTG2jFj4SFqumYflY0lF0pwc';
 var SHEET_NAME = '업체관리';
 var USER_SHEET = '사용자';
+var LOG_SHEET = '변경로그';
+var LOG_TZ = 'Asia/Seoul';
 
 // 서명/해시용 비밀키. 그냥 두셔도 되고, 바꾸면 기존 토큰·비번해시가 무효화됩니다.
 var SECRET = 'wnet-2026-8f3a9c1e-partner-secret';
@@ -31,6 +33,7 @@ var HEADERS = [
   '보증보험', '웹접수', '웹회신'
 ];
 var USER_HEADERS = ['아이디', '비번해시', '이름', '권한', '상태', '등록일'];
+var LOG_HEADERS = ['일시', '아이디', '이름', '작업', '대상', '상세'];
 
 /* ------------------------- 공통 ------------------------- */
 function ss_() {
@@ -47,6 +50,7 @@ function sheet_(name, headers) {
   }
   return sh;
 }
+function logSheet_() { return sheet_(LOG_SHEET, LOG_HEADERS); }
 function dataSheet_() {
   var sh = sheet_(SHEET_NAME, HEADERS);
   // 구버전 시트(21열)면 확장 컬럼 헤더를 뒤에 추가 (기존 데이터는 그대로)
@@ -156,7 +160,101 @@ function registerFirstAdmin_(id, pw, name) {
 function requireAuth_(token) {
   var u = verifyToken_(token);
   if (!u) throw new Error('unauthorized');
+  var rec = findUser_(u.id);
+  u.name = rec ? (rec.이름 || u.id) : u.id;
+  if (rec && rec.권한) u.role = rec.권한;   // 시트의 최신 권한을 신뢰 (토큰 발급 후 변경 대비)
   return u;
+}
+// 어드민 전용 작업 (계정 추가·삭제·타인 비밀번호 초기화)
+function requireAdmin_(token) {
+  var u = requireAuth_(token);
+  if (String(u.role) !== 'admin') throw new Error('관리자 권한이 필요합니다. (스태프 계정은 본인 비밀번호만 변경할 수 있습니다)');
+  return u;
+}
+
+/* ------------------------- 변경로그 ------------------------- */
+// 로그 기록은 본 작업을 방해하면 안 되므로 실패해도 조용히 무시
+function log_(user, action, target, detail) {
+  try {
+    logSheet_().appendRow([
+      new Date(),
+      (user && user.id) || '',
+      (user && user.name) || '',
+      action || '',
+      target || '',
+      detail || ''
+    ]);
+  } catch (e) {}
+}
+
+// 이번 주(월요일 00:00 ~ 현재) 시작 시각
+function weekStart_() {
+  var now = new Date();
+  var dow = Number(Utilities.formatDate(now, LOG_TZ, 'u'));      // 1=월 … 7=일
+  var ymd = Utilities.formatDate(now, LOG_TZ, 'yyyy/MM/dd');
+  var midnight = new Date(ymd + ' 00:00:00');
+  return new Date(midnight.getTime() - (dow - 1) * 86400000);
+}
+
+// 이번 주 로그만 최신순으로 반환 (전체 스캔 방지 위해 최근 3000행만 확인)
+function readLogs_() {
+  var sh = logSheet_();
+  var last = sh.getLastRow();
+  if (last < 2) return [];
+  var from = Math.max(2, last - 2999);
+  var v = sh.getRange(from, 1, last - from + 1, LOG_HEADERS.length).getValues();
+  var since = weekStart_();
+  var out = [];
+  for (var i = v.length - 1; i >= 0; i--) {
+    var t = (v[i][0] instanceof Date) ? v[i][0] : new Date(v[i][0]);
+    if (isNaN(t.getTime())) continue;
+    if (t < since) break;   // 시간순 정렬이므로 이번 주 이전을 만나면 종료
+    out.push({
+      일시: Utilities.formatDate(t, LOG_TZ, 'MM/dd(E) HH:mm'),
+      아이디: String(v[i][1] || ''),
+      이름: String(v[i][2] || ''),
+      작업: String(v[i][3] || ''),
+      대상: String(v[i][4] || ''),
+      상세: String(v[i][5] || '')
+    });
+  }
+  return out;
+}
+
+/* ------------------------- 비밀번호 ------------------------- */
+// 본인 비밀번호 변경 (스태프·어드민 모두 가능)
+function changeMyPw_(user, oldPw, newPw) {
+  var u = findUser_(user.id);
+  if (!u) return { ok: false, error: '계정을 찾을 수 없습니다.' };
+  if (u.비번해시 !== hashPw_(user.id, oldPw)) return { ok: false, error: '현재 비밀번호가 올바르지 않습니다.' };
+  if (String(newPw || '').length < 4) return { ok: false, error: '새 비밀번호는 4자 이상이어야 합니다.' };
+  var sh = userSheet_(); var last = sh.getLastRow();
+  var v = sh.getRange(2, 1, last - 1, 1).getValues();
+  for (var i = 0; i < v.length; i++) {
+    if (String(v[i][0]).trim() === user.id) {
+      sh.getRange(i + 2, 2).setValue(hashPw_(user.id, newPw));
+      log_(user, '비밀번호변경', user.id, '본인 비밀번호 변경');
+      return { ok: true };
+    }
+  }
+  return { ok: false, error: '계정을 찾을 수 없습니다.' };
+}
+
+// 타인 비밀번호 초기화 (어드민 전용)
+function resetPw_(admin, targetId, newPw) {
+  targetId = String(targetId || '').trim();
+  if (!findUser_(targetId)) return { ok: false, error: '없는 아이디입니다.' };
+  if (String(newPw || '').length < 4) return { ok: false, error: '비밀번호는 4자 이상이어야 합니다.' };
+  var sh = userSheet_(); var last = sh.getLastRow();
+  var v = sh.getRange(2, 1, last - 1, 1).getValues();
+  for (var i = 0; i < v.length; i++) {
+    if (String(v[i][0]).trim() === targetId) {
+      sh.getRange(i + 2, 2).setValue(hashPw_(targetId, newPw));
+      log_(admin, '비밀번호초기화', targetId, '관리자가 비밀번호 재설정');
+      return { ok: true };
+    }
+  }
+  return { ok: false, error: '없는 아이디입니다.' };
 }
 
 /* ------------------------- 데이터 ------------------------- */
@@ -205,20 +303,24 @@ function doPost(e) {
 
     // 이하 로그인 필요
     if (action === 'list') { requireAuth_(body.token); return json_({ ok: true, companies: readAll_() }); }
-    if (action === 'upsert') { requireAuth_(body.token); return json_(upsert_(body.company)); }
-    if (action === 'delete') { requireAuth_(body.token); return json_(remove_(body.id)); }
-    if (action === 'bulkImport') { requireAuth_(body.token); return json_(bulkImport_(body.companies, body.replace)); }
-    if (action === 'merge') { requireAuth_(body.token); return json_({ ok: true, summary: 병합실행() }); }
-    if (action === 'bulkUpsert') { requireAuth_(body.token); return json_(bulkUpsert_(body.companies)); }
-    if (action === 'listUsers') { requireAuth_(body.token); return json_({ ok: true, users: usersPublic_() }); }
-    if (action === 'createUser') { requireAuth_(body.token); return json_(createUser_(body.id, body.pw, body.name, body.role)); }
-    if (action === 'deleteUser') { requireAuth_(body.token); return json_(deleteUser_(body.id)); }
+    if (action === 'upsert') { var uU = requireAuth_(body.token); return json_(upsert_(body.company, uU)); }
+    if (action === 'delete') { var uD = requireAuth_(body.token); return json_(remove_(body.id, uD)); }
+    if (action === 'bulkImport') { var uB = requireAuth_(body.token); return json_(bulkImport_(body.companies, body.replace, uB)); }
+    if (action === 'merge') { var uM = requireAuth_(body.token); var sm = 병합실행(); log_(uM, '②③병합', '전체', sm); return json_({ ok: true, summary: sm }); }
+    if (action === 'bulkUpsert') { var uBU = requireAuth_(body.token); return json_(bulkUpsert_(body.companies, uBU)); }
+    if (action === 'logs') { requireAuth_(body.token); return json_({ ok: true, logs: readLogs_() }); }
+    if (action === 'listUsers') { var uL = requireAuth_(body.token); return json_({ ok: true, users: usersPublic_(), me: uL.id, role: uL.role }); }
+    if (action === 'changeMyPw') { var uP = requireAuth_(body.token); return json_(changeMyPw_(uP, body.oldPw, body.newPw)); }
+    // 어드민 전용
+    if (action === 'createUser') { var uC = requireAdmin_(body.token); var rc = createUser_(body.id, body.pw, body.name, body.role); if (rc.ok) log_(uC, '계정추가', body.id, '권한: ' + (body.role || 'staff')); return json_(rc); }
+    if (action === 'deleteUser') { var uX = requireAdmin_(body.token); var rd = deleteUser_(body.id); if (rd.ok) log_(uX, '계정삭제', body.id, ''); return json_(rd); }
+    if (action === 'resetPw') { var uR = requireAdmin_(body.token); return json_(resetPw_(uR, body.id, body.pw)); }
     return json_({ ok: false, error: 'unknown action: ' + action });
   } catch (err) { return json_({ ok: false, error: String(err && err.message || err) }); }
 }
 
 /* ------------------------- 액션 ------------------------- */
-function upsert_(company) {
+function upsert_(company, user) {
   if (!company) return { ok: false, error: 'no company' };
   var lock = LockService.getScriptLock(); lock.waitLock(20000);
   try {
@@ -226,18 +328,28 @@ function upsert_(company) {
     if (company.id) {
       for (var i = 0; i < rows.length; i++) {
         if (String(rows[i].id) === String(company.id)) {
-          var merged = rows[i]; for (var k in company) merged[k] = company[k];
+          var before = rows[i];
+          var diffs = [];
+          for (var f in company) {
+            if (f === 'id' || f === '수정일시') continue;
+            var ov = before[f] === undefined || before[f] === null ? '' : String(before[f]);
+            var nv = company[f] === undefined || company[f] === null ? '' : String(company[f]);
+            if (ov !== nv) diffs.push(f + ': ' + (ov || '(없음)') + ' → ' + (nv || '(없음)'));
+          }
+          var merged = before; for (var k in company) merged[k] = company[k];
           sh.getRange(i + 2, 1, 1, HEADERS.length).setValues([rowFromObj_(merged)]);
+          if (diffs.length) log_(user, '수정', merged['업체명'] || ('id ' + merged.id), diffs.join(' | '));
           return { ok: true, mode: 'update', company: merged };
         }
       }
     }
     company.id = nextId_(rows); sh.appendRow(rowFromObj_(company));
+    log_(user, '신규등록', company['업체명'] || ('id ' + company.id), '소속: ' + (company['소속원문'] || '') + ' · 구분: ' + (company['업체구분'] || ''));
     return { ok: true, mode: 'insert', company: company };
   } finally { lock.releaseLock(); }
 }
 // 여러 업체를 id 기준으로 한 번에 부분 갱신 (개통리스트 현행화용)
-function bulkUpsert_(companies) {
+function bulkUpsert_(companies, user) {
   if (!companies || !companies.length) return { ok: false, error: 'no companies' };
   var lock = LockService.getScriptLock(); lock.waitLock(30000);
   try {
@@ -245,33 +357,43 @@ function bulkUpsert_(companies) {
     var rows = readAll_();
     var byId = {};
     rows.forEach(function (r, i) { byId[String(r.id)] = i; });
-    var now = new Date(); var updated = 0;
+    var now = new Date(); var updated = 0; var names = [];
     companies.forEach(function (c) {
       if (!c || c.id === undefined || c.id === '') return;
       var i = byId[String(c.id)];
       if (i === undefined) return;
+      var note = rows[i]['업체명'] || ('id ' + c.id);
+      if (c['상태'] === '활성' && rows[i]['상태'] === '휴면') note += '(휴면→활성)';
+      else if (c['기호'] !== undefined && String(c['기호']) !== String(rows[i]['기호'] || '')) note += '(' + (rows[i]['기호'] || '없음') + '→' + c['기호'] + ')';
+      names.push(note);
       for (var k in c) { if (k !== 'id') rows[i][k] = c[k]; }
       rows[i]['수정일시'] = now;
       updated++;
     });
     var out = rows.map(rowFromObj_);
     if (out.length) sh.getRange(2, 1, out.length, HEADERS.length).setValues(out);
+    if (updated) log_(user, '개통리스트 현행화', updated + '개 업체', names.slice(0, 40).join(', ') + (names.length > 40 ? ' 외 ' + (names.length - 40) + '개' : ''));
     return { ok: true, updated: updated };
   } finally { lock.releaseLock(); }
 }
 
-function remove_(id) {
+function remove_(id, user) {
   if (!id) return { ok: false, error: 'no id' };
   var lock = LockService.getScriptLock(); lock.waitLock(20000);
   try {
     var sh = dataSheet_(); var rows = readAll_();
     for (var i = 0; i < rows.length; i++) {
-      if (String(rows[i].id) === String(id)) { sh.deleteRow(i + 2); return { ok: true, deleted: id }; }
+      if (String(rows[i].id) === String(id)) {
+        var nm = rows[i]['업체명'] || ('id ' + id);
+        sh.deleteRow(i + 2);
+        log_(user, '삭제', nm, '소속: ' + (rows[i]['소속원문'] || ''));
+        return { ok: true, deleted: id };
+      }
     }
     return { ok: false, error: 'not found: ' + id };
   } finally { lock.releaseLock(); }
 }
-function bulkImport_(companies, replace) {
+function bulkImport_(companies, replace, user) {
   if (!companies || !companies.length) return { ok: false, error: 'no companies' };
   var lock = LockService.getScriptLock(); lock.waitLock(30000);
   try {
@@ -280,6 +402,8 @@ function bulkImport_(companies, replace) {
     var start = replace ? 1 : nextId_(readAll_()); var now = new Date();
     var out = companies.map(function (c, idx) { if (!c.id) c.id = start + idx; c['수정일시'] = now; return rowFromObj_(c); });
     sh.getRange(sh.getLastRow() + 1, 1, out.length, HEADERS.length).setValues(out);
+    var nms = companies.map(function (c) { return c['업체명'] || ''; }).filter(String);
+    log_(user, '개통리스트 신규등록', out.length + '개 업체', nms.slice(0, 40).join(', ') + (nms.length > 40 ? ' 외 ' + (nms.length - 40) + '개' : ''));
     return { ok: true, imported: out.length };
   } finally { lock.releaseLock(); }
 }

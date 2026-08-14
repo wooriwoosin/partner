@@ -108,6 +108,7 @@ tbody tr:hover { background: rgba(37,99,235,.05); }
 .stat.inv2 .n { color: var(--sales); }
 .stat.inv3 .n { color: var(--amber); }
 .note-cell { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.log-detail { max-width: 520px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 12px; }
 
 /* delivery cells */
 .yn { font-weight: 800; }

@@ -42,6 +42,7 @@
       <button class="btn sm tab-btn" data-view="invoice">🧾 계산서</button>
       <button class="btn sm tab-btn" data-view="contract">📝 계약서·보증보험</button>
       <button class="btn sm tab-btn" data-view="settle">💰 정산변환</button>
+      <button class="btn sm tab-btn" data-view="log">📋 변경로그</button>
     </div>
 
     <div class="toolbar">
@@ -91,6 +92,21 @@
     <!-- 💰 정산변환 (settle.html 내장) -->
     <div id="settleWrap" style="display:none">
       <iframe id="settleFrame" title="정산내역서 가공" style="width:100%;height:calc(100vh - 170px);border:0;border-radius:12px;background:#f0f2f5"></iframe>
+    </div>
+
+    <!-- 📋 변경로그 -->
+    <div id="logWrap" style="display:none">
+      <div class="toolbar">
+        <input id="logSearch" type="search" placeholder="사용자 · 업체명 · 작업 검색" />
+        <button id="logReload" class="btn ghost sm">새로고침</button>
+        <span class="count">이번 주(월요일~현재) 기록만 표시됩니다</span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>일시</th><th>사용자</th><th>작업</th><th>대상</th><th>상세</th></tr></thead>
+          <tbody id="logTbody"></tbody>
+        </table>
+      </div>
     </div>
   </div>
 
@@ -215,7 +231,18 @@
         <button id="closeUsers" class="x">×</button>
       </header>
       <div class="body">
+        <!-- 본인 비밀번호 변경 (모든 계정) -->
         <div class="deliv-group" style="margin-top:0">
+          <div class="gh">🔑 내 비밀번호 변경</div>
+          <div class="grid2">
+            <div class="field"><label>현재 비밀번호</label><input id="mp_old" type="password" autocomplete="current-password" /></div>
+            <div class="field"><label>새 비밀번호 (4자 이상)</label><input id="mp_new" type="password" autocomplete="new-password" /></div>
+            <div class="field" style="justify-content:flex-end"><button id="mp_save" class="btn primary">비밀번호 변경</button></div>
+          </div>
+          <div id="mp_msg" class="auth-msg" style="text-align:left;min-height:0;margin:8px 0 0"></div>
+        </div>
+
+        <div class="deliv-group admin-only">
           <div class="gh">새 계정 추가</div>
           <div class="grid2">
             <div class="field"><label>아이디</label><input id="nu_id" autocomplete="off" /></div>
@@ -225,11 +252,15 @@
           </div>
           <div id="nu_msg" class="auth-msg" style="text-align:left;min-height:0;margin:8px 0 0"></div>
         </div>
-        <div style="margin-top:14px" class="table-wrap">
+        <div style="margin-top:14px" class="table-wrap admin-only">
           <table style="min-width:0">
             <thead><tr><th>아이디</th><th>이름</th><th>권한</th><th>상태</th><th></th></tr></thead>
             <tbody id="usersTbody"></tbody>
           </table>
+        </div>
+        <div id="staffNote" class="preview-box" style="display:none;margin-top:14px">
+          스태프 계정입니다. 업체 정보 조회·등록·수정은 어드민과 동일하게 가능하며,
+          <b>계정 추가·삭제와 다른 사람 비밀번호 변경만</b> 어드민 전용입니다.
         </div>
       </div>
       <footer><div class="spacer"></div><button id="closeUsers2" class="btn ghost">닫기</button></footer>
