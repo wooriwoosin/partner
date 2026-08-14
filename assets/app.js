@@ -82,10 +82,12 @@
   /* ============ API ============ */
   function apiList() {
     if (!LIVE) {
-      return fetch('data/seed.json').then(function (r) { return r.json(); })
+      return fetch('data/seed.json', { cache: 'no-store' }).then(function (r) { return r.json(); })
         .then(function (d) { return d.companies || []; });
     }
-    return fetch(CFG.API_URL + '?action=list&token=' + encodeURIComponent(TOKEN), { method: 'GET' })
+    // 캐시 방지: 같은 URL 이면 브라우저가 이전 응답을 재사용해 시트 수정이 반영되지 않는다
+    var url = CFG.API_URL + '?action=list&token=' + encodeURIComponent(TOKEN) + '&_=' + Date.now();
+    return fetch(url, { method: 'GET', cache: 'no-store' })
       .then(function (r) { return r.json(); })
       .then(function (d) {
         if (!d.ok) throw new Error(d.error || 'list 실패');

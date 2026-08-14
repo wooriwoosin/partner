@@ -1185,7 +1185,7 @@ function dlOne(i){const r=results[i];if(!r?.ok)return;const url=URL.createObject
     if (msg) msg.innerHTML = '💡 업체 관리앱에 로그인하면 메인 DB의 계산서방식을 자동으로 불러옵니다';
     return;
   }
-  fetch(CFG.API_URL + '?action=list&token=' + encodeURIComponent(token))
+  fetch(CFG.API_URL + '?action=list&token=' + encodeURIComponent(token) + '&_=' + Date.now(), { cache: 'no-store' })
     .then(function (r) { return r.json(); })
     .then(function (d) {
       if (!d.ok) throw new Error(d.error || 'list 실패');
