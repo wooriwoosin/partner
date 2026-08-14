@@ -740,6 +740,27 @@
     $('#upColWrap').style.display = '';
     $('#upCol').onchange = function () { UP.colIdx = Number(this.value); buildCandidates(); };
 
+    // 자동 인식에 성공하면 목록(수십 개 열)은 접어두고 결과만 한 줄로 보여준다
+    var info = $('#upColInfo');
+    if (UP.colIdx >= 0) {
+      var hName = cellAt(UP.headerRow, UP.colIdx);
+      var mName = UP.markerCol >= 0 ? cellAt(UP.headerRow, UP.markerCol) : '';
+      info.innerHTML = '✅ <b>' + (UP.colIdx + 1) + '열' + (hName ? ' (' + esc(hName) + ')' : '') + '</b> 자동 인식'
+        + (mName ? ' · 마커는 <b>' + (UP.markerCol + 1) + '열 (' + esc(mName) + ')</b>에서 읽음' : '')
+        + ' <a href="#" id="upColToggle" style="margin-left:6px">다른 열 선택</a>';
+      $('#upCol').style.display = 'none';
+      $('#upColToggle').onclick = function (e) {
+        e.preventDefault();
+        var sel = $('#upCol');
+        var open = sel.style.display === 'none';
+        sel.style.display = open ? '' : 'none';
+        this.textContent = open ? '접기' : '다른 열 선택';
+      };
+    } else {
+      info.innerHTML = '';
+      $('#upCol').style.display = '';
+    }
+
     if (UP.colIdx < 0) {
       $('#upSummary').style.display = '';
       $('#upSummary').innerHTML = '업체명이 들어있는 열을 자동으로 찾지 못했어요. 위에서 <b>실제 값을 보고</b> 직접 골라주세요.';
