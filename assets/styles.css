@@ -1,19 +1,20 @@
+/* ☀️ 라이트모드 고정 — 다크모드 절대 금지 */
 :root {
-  --bg: #0f1420;
-  --panel: #171e2e;
-  --panel2: #1f2940;
-  --line: #2a3552;
-  --text: #e7ecf5;
-  --muted: #93a0bd;
-  --accent: #4f8cff;
-  --green: #33c37e;
-  --red: #ff5d6c;
-  --amber: #ffb020;
-  --sales: #f0883e;   /* 판매점 */
-  --partner: #4f8cff; /* 협력점 */
-  --own: #9b8cff;     /* 자점 */
+  --bg: #f4f6f9;
+  --panel: #ffffff;
+  --panel2: #f1f4f8;
+  --line: #dfe5ee;
+  --text: #1d2733;
+  --muted: #64748b;
+  --accent: #2563eb;
+  --green: #16a34a;
+  --red: #dc2626;
+  --amber: #d97706;
+  --sales: #ea580c;   /* 판매점 */
+  --partner: #2563eb; /* 협력점 */
+  --own: #7c3aed;     /* 자점 */
   --radius: 12px;
-  --shadow: 0 6px 20px rgba(0,0,0,.35);
+  --shadow: 0 1px 3px rgba(0,0,0,.07), 0 4px 16px rgba(0,0,0,.05);
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; }
@@ -82,8 +83,8 @@ thead th {
   text-align: left; padding: 10px 10px; font-weight: 600; border-bottom: 1px solid var(--line);
   white-space: nowrap; font-size: 12px;
 }
-tbody td { padding: 9px 10px; border-bottom: 1px solid rgba(42,53,82,.5); vertical-align: middle; white-space: nowrap; }
-tbody tr:hover { background: rgba(79,140,255,.06); }
+tbody td { padding: 9px 10px; border-bottom: 1px solid #eef2f7; vertical-align: middle; white-space: nowrap; }
+tbody tr:hover { background: rgba(37,99,235,.05); }
 .name-cell { font-weight: 700; }
 .name-cell .raw { display: block; font-weight: 400; color: var(--muted); font-size: 11px; }
 
@@ -110,11 +111,11 @@ tbody tr:hover { background: rgba(79,140,255,.06); }
 /* delivery cells */
 .yn { font-weight: 800; }
 .yn.y { color: var(--green); }
-.yn.n { color: #5a6684; }
-.yn.blank { color: #46506b; }
+.yn.n { color: #b3bfd0; }
+.yn.blank { color: #ccd5e0; }
 
 /* Modal */
-.overlay { position: fixed; inset: 0; background: rgba(6,9,16,.66); display: none; align-items: flex-start; justify-content: center; padding: 40px 16px; z-index: 50; overflow-y: auto; }
+.overlay { position: fixed; inset: 0; background: rgba(15,23,42,.45); display: none; align-items: flex-start; justify-content: center; padding: 40px 16px; z-index: 50; overflow-y: auto; }
 .overlay.open { display: flex; }
 .modal { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; width: 100%; max-width: 680px; box-shadow: var(--shadow); }
 .modal header { display: flex; align-items: center; padding: 16px 18px; border-bottom: 1px solid var(--line); }
@@ -149,7 +150,7 @@ tbody tr:hover { background: rgba(79,140,255,.06); }
 #toast.ok { border-color: var(--green); }
 
 /* 로그인 화면 */
-.auth-screen { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; padding: 20px; background: radial-gradient(1200px 600px at 50% -10%, #1b2540, var(--bg)); z-index: 200; }
+.auth-screen { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; padding: 20px; background: radial-gradient(1200px 600px at 50% -10%, #e3ecfb, var(--bg)); z-index: 200; }
 .auth-card { width: 100%; max-width: 360px; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 28px 24px; box-shadow: var(--shadow); }
 .auth-title { font-size: 22px; margin: 0 0 4px; text-align: center; letter-spacing: -.3px; }
 .auth-sub { text-align: center; color: var(--muted); font-size: 13px; margin-bottom: 20px; }
