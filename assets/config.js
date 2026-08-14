@@ -7,7 +7,7 @@
  * 3) Apps Script Code.gs 의 WRITE_TOKEN 을 설정했다면 아래 WRITE_TOKEN 도 동일하게 맞추세요.
  */
 window.APP_CONFIG = {
-  API_URL: 'https://script.google.com/macros/s/AKfycbzwrkeF47XnvBax0Xu8FgX3ZptkGkkUvxOSRCo_Z93WArSsItgwsalXNNQKw0g4pX-D9Q/exec',
+  API_URL: 'https://script.google.com/macros/s/AKfycbzRPWzCDhi8n_vuvwHWHOaNXY-JlGlmXYrZd0_CBUW3qtBTWdHo9gFMeiiBogaTGA1Jng/exec',
   WRITE_TOKEN: '',      // <-- Code.gs 의 WRITE_TOKEN 과 동일하게 (안 쓰면 빈칸)
   SHEET_ID: '1shhA5RdXP7DiaMIyR33bTG2jFj4SFqumYflY0lF0pwc',
   SHEET_URL: 'https://docs.google.com/spreadsheets/d/1shhA5RdXP7DiaMIyR33bTG2jFj4SFqumYflY0lF0pwc/edit',
