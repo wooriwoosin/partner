@@ -66,8 +66,10 @@
   }
 
   /* ============ 상태 ============ */
-  var STATE = { all: [], view: [], filter: { gubun: '', marker: '', web: '', status: '', q: '' } };
+  var STATE = { all: [], view: [], filter: { gubun: '', marker: '', web: '', status: '', inv: '', q: '' } };
+  var VIEW = 'base'; // base | invoice | contract
   var DELIV_FIELDS = ['접수대행', '유선접수전달', '유선개통전달', '무선개통전달', '회신전달'];
+  var EDITING = null; // 수정 중인 원본 레코드 (출처 등 폼에 없는 필드 보존용)
 
   /* ============ API ============ */
   function apiList() {
@@ -191,27 +193,51 @@
   }
 
   function computeStats() {
-    var s = { total: STATE.all.length, 판매점: 0, 협력점: 0, 자점: 0, hold: 0 };
+    var s = { total: STATE.all.length, 판매점: 0, 협력점: 0, 자점: 0, hold: 0, 정발행: 0, 역발행: 0, 원천세: 0, 계약완료: 0 };
     STATE.all.forEach(function (c) {
       if (s[c.업체구분] !== undefined) s[c.업체구분]++;
       if (c.상태 === '보류') s.hold++;
+      if (s[c.계산서형태] !== undefined) s[c.계산서형태]++;
+      if (c.계약서1 === 'Y' && c.계약서2 === 'Y') s.계약완료++;
     });
     return s;
   }
   function renderStats() {
     var s = computeStats();
-    $('#stats').innerHTML = [
+    var cards = [
       statCard('', 'total', s.total, '전체 업체'),
       statCard('sales', '판매점', s.판매점, '판매점'),
       statCard('partner', '협력점', s.협력점, '협력점'),
       statCard('own', '자점', s.자점, '자점'),
       statCard('hold', '__hold', s.hold, '보류(정리대상)')
-    ].join('');
+    ];
+    if (VIEW === 'invoice') {
+      cards = [
+        statCard('', 'total', s.total, '전체 업체'),
+        statCard('inv1', 'inv:정발행', s.정발행, '정발행'),
+        statCard('inv2', 'inv:역발행', s.역발행, '역발행'),
+        statCard('inv3', 'inv:원천세', s.원천세, '원천세'),
+        statCard('hold', 'inv:__none', s.total - s.정발행 - s.역발행 - s.원천세, '계산서정보 없음/기타')
+      ];
+    } else if (VIEW === 'contract') {
+      var noInfo = STATE.all.filter(function (c) { return !c.계약서1; }).length;
+      cards = [
+        statCard('', 'total', s.total, '전체 업체'),
+        statCard('partner', '__c_done', s.계약완료, '계약 완료(①②)'),
+        statCard('hold', '__c_no', noInfo, '계약정보 없음')
+      ];
+    }
+    $('#stats').innerHTML = cards.join('');
     $$('#stats .stat').forEach(function (el) {
       el.onclick = function () {
         var key = el.getAttribute('data-key');
         if (key === '__hold') { STATE.filter.status = STATE.filter.status === '보류' ? '' : '보류'; STATE.filter.gubun = ''; }
-        else if (key === 'total') { STATE.filter.gubun = ''; STATE.filter.status = ''; }
+        else if (key === 'total') { STATE.filter.gubun = ''; STATE.filter.status = ''; STATE.filter.inv = ''; }
+        else if (key.indexOf('inv:') === 0) {
+          var v = key.slice(4);
+          STATE.filter.inv = STATE.filter.inv === v ? '' : v;
+        }
+        else if (key === '__c_done' || key === '__c_no') { return; } // 정보용
         else { STATE.filter.gubun = STATE.filter.gubun === key ? '' : key; STATE.filter.status = ''; }
         syncControls(); applyFilter();
       };
@@ -219,7 +245,8 @@
   }
   function statCard(cls, key, n, label) {
     var active = (key === STATE.filter.gubun) || (key === '__hold' && STATE.filter.status === '보류')
-      || (key === 'total' && !STATE.filter.gubun && !STATE.filter.status);
+      || (key.indexOf('inv:') === 0 && STATE.filter.inv === key.slice(4))
+      || (key === 'total' && !STATE.filter.gubun && !STATE.filter.status && !STATE.filter.inv);
     return '<div class="stat ' + cls + (active ? ' active' : '') + '" data-key="' + key + '">' +
       '<div class="n">' + n + '</div><div class="l">' + label + '</div></div>';
   }
@@ -231,8 +258,12 @@
       if (f.marker && (c.전달마커 || '') !== f.marker) return false;
       if (f.web && (c.웹활용 || '') !== f.web) return false;
       if (f.status && c.상태 !== f.status) return false;
+      if (f.inv) {
+        var iv = c.계산서형태 || '';
+        if (f.inv === '__none' ? iv !== '' : iv !== f.inv) return false;
+      }
       if (q) {
-        var hay = (c.업체명 + ' ' + c.소속원문 + ' ' + (c.대표아이디 || '') + ' ' + (c.연락처 || '')).toLowerCase();
+        var hay = (c.업체명 + ' ' + c.소속원문 + ' ' + (c.대표아이디 || '') + ' ' + (c.연락처 || '') + ' ' + (c.대표자 || '')).toLowerCase();
         if (hay.indexOf(q) < 0) return false;
       }
       return true;
@@ -241,29 +272,67 @@
     renderTable();
   }
 
+  var THEADS = {
+    base: '<tr><th>업체 / 소속(원문)</th><th>구분</th><th>마커</th><th>소통채널</th>' +
+      '<th title="웹활용">웹</th><th title="어드민 접수 대행">접수</th><th title="유선 접수이력 전달">유선접수</th>' +
+      '<th title="유선 개통완료 전달">유선개통</th><th title="무선 개통완료 전달(항상)">무선개통</th><th title="회신내용 전달">회신</th>' +
+      '<th title="계정수">계정</th><th>상태</th><th>비고</th><th></th></tr>',
+    invoice: '<tr><th>업체 / 소속(원문)</th><th>구분</th><th>법인</th><th>계산서형태</th><th>수신방법</th><th>계산서 비고</th><th>상태</th><th></th></tr>',
+    contract: '<tr><th>업체 / 소속(원문)</th><th>구분</th><th>대표자</th><th>연락처</th><th>계약①</th><th>계약②</th><th>사업자</th><th>제외</th><th>계약 비고</th><th></th></tr>'
+  };
+  var VIEW_COLS = { base: 14, invoice: 8, contract: 10 };
+
+  function nameCell(c) {
+    return '<td class="name-cell">' + esc(c.업체명) + (c.인센티브 === 'Y' ? ' <span class="chip inc">인센</span>' : '') +
+      '<span class="raw">' + esc(c.소속원문) + '</span></td>' +
+      '<td><span class="chip g-' + esc(c.업체구분) + '">' + esc(c.업체구분) + '</span></td>';
+  }
+  function invChip(v) {
+    return v ? '<span class="chip i-' + esc(v) + '">' + esc(v) + '</span>' : '<span class="yn blank">–</span>';
+  }
+  function rowBase(c) {
+    var mk = c.전달마커 || '';
+    return nameCell(c) +
+      '<td>' + (mk ? '<span class="chip m-' + esc(mk) + '">' + esc(mk) + '</span>' : '<span class="yn blank">–</span>') + '</td>' +
+      '<td>' + esc(c.소통채널 || '') + '</td>' +
+      '<td style="text-align:center">' + yn(c.웹활용) + '</td>' +
+      '<td style="text-align:center">' + yn(c.접수대행) + '</td>' +
+      '<td style="text-align:center">' + yn(c.유선접수전달) + '</td>' +
+      '<td style="text-align:center">' + yn(c.유선개통전달) + '</td>' +
+      '<td style="text-align:center">' + yn(c.무선개통전달) + '</td>' +
+      '<td style="text-align:center">' + yn(c.회신전달) + '</td>' +
+      '<td style="text-align:center">' + esc(c.계정수 || '') + '</td>' +
+      '<td><span class="chip status-' + esc(c.상태) + '">' + esc(c.상태) + '</span></td>' +
+      '<td class="note-cell" title="' + esc(c.비고 || '') + '">' + esc(c.비고 || '') + '</td>';
+  }
+  function rowInvoice(c) {
+    return nameCell(c) +
+      '<td>' + esc(c.법인 || '') + '</td>' +
+      '<td>' + invChip(c.계산서형태) + '</td>' +
+      '<td>' + esc(c.수신방법 || '') + '</td>' +
+      '<td class="note-cell" title="' + esc(c.계산서비고 || '') + '">' + esc(c.계산서비고 || '') + '</td>' +
+      '<td><span class="chip status-' + esc(c.상태) + '">' + esc(c.상태) + '</span></td>';
+  }
+  function rowContract(c) {
+    return nameCell(c) +
+      '<td>' + esc(c.대표자 || '') + '</td>' +
+      '<td>' + esc(c.연락처 || '') + '</td>' +
+      '<td style="text-align:center">' + yn(c.계약서1) + '</td>' +
+      '<td style="text-align:center">' + yn(c.계약서2) + '</td>' +
+      '<td style="text-align:center">' + yn(c.사업자등록증) + '</td>' +
+      '<td style="text-align:center">' + (c.계약제외 === 'Y' ? '<span class="chip m-X">제외</span>' : '<span class="yn blank">–</span>') + '</td>' +
+      '<td class="note-cell" title="' + esc(c.계약비고 || '') + '">' + esc(c.계약비고 || '') + '</td>';
+  }
+
   function renderTable() {
     var rows = STATE.view;
+    $('#thead').innerHTML = THEADS[VIEW];
     $('#count').textContent = rows.length + ' / ' + STATE.all.length + ' 업체';
-    if (!rows.length) { $('#tbody').innerHTML = '<tr><td colspan="14" class="empty">조건에 맞는 업체가 없습니다.</td></tr>'; return; }
+    if (!rows.length) { $('#tbody').innerHTML = '<tr><td colspan="' + VIEW_COLS[VIEW] + '" class="empty">조건에 맞는 업체가 없습니다.</td></tr>'; return; }
+    var renderRow = VIEW === 'invoice' ? rowInvoice : (VIEW === 'contract' ? rowContract : rowBase);
     $('#tbody').innerHTML = rows.map(function (c) {
-      var mk = c.전달마커 || '';
-      return '<tr data-id="' + esc(c.id) + '">' +
-        '<td class="name-cell">' + esc(c.업체명) + (c.인센티브 === 'Y' ? ' <span class="chip inc">인센</span>' : '') +
-        '<span class="raw">' + esc(c.소속원문) + '</span></td>' +
-        '<td><span class="chip g-' + esc(c.업체구분) + '">' + esc(c.업체구분) + '</span></td>' +
-        '<td>' + (mk ? '<span class="chip m-' + esc(mk) + '">' + esc(mk) + '</span>' : '<span class="yn blank">–</span>') + '</td>' +
-        '<td>' + esc(c.소통채널 || '') + '</td>' +
-        '<td style="text-align:center">' + yn(c.웹활용) + '</td>' +
-        '<td style="text-align:center">' + yn(c.접수대행) + '</td>' +
-        '<td style="text-align:center">' + yn(c.유선접수전달) + '</td>' +
-        '<td style="text-align:center">' + yn(c.유선개통전달) + '</td>' +
-        '<td style="text-align:center">' + yn(c.무선개통전달) + '</td>' +
-        '<td style="text-align:center">' + yn(c.회신전달) + '</td>' +
-        '<td style="text-align:center">' + esc(c.계정수 || '') + '</td>' +
-        '<td><span class="chip status-' + esc(c.상태) + '">' + esc(c.상태) + '</span></td>' +
-        '<td>' + esc(c.비고 || '') + '</td>' +
-        '<td><button class="btn sm ghost edit">수정</button></td>' +
-        '</tr>';
+      return '<tr data-id="' + esc(c.id) + '">' + renderRow(c) +
+        '<td><button class="btn sm ghost edit">수정</button></td></tr>';
     }).join('');
     $$('#tbody .edit').forEach(function (b) {
       b.onclick = function () { openModal(b.closest('tr').getAttribute('data-id')); };
@@ -272,10 +341,12 @@
 
   /* ============ 모달 ============ */
   function blankCompany() {
-    return { id: '', 소속원문: '', 업체명: '', 기호: '', 업체구분: '', 인센티브: 'N', 전달마커: '', 소통채널: '', 웹활용: '', 직접접수: '', 접수대행: '', 유선접수전달: '', 유선개통전달: '', 무선개통전달: '', 회신전달: '', 계정수: '', 대표아이디: '', 연락처: '', 상태: '활성', 비고: '' };
+    return { id: '', 소속원문: '', 업체명: '', 기호: '', 업체구분: '', 인센티브: 'N', 전달마커: '', 소통채널: '', 웹활용: '', 직접접수: '', 접수대행: '', 유선접수전달: '', 유선개통전달: '', 무선개통전달: '', 회신전달: '', 계정수: '', 대표아이디: '', 연락처: '', 상태: '활성', 비고: '',
+      법인: '', 대표자: '', 계산서형태: '', 수신방법: '', 계산서비고: '', 계약서1: '', 계약서2: '', 사업자등록증: '', 계약제외: '', 계약비고: '', 출처: '' };
   }
   function openModal(id) {
     var c = id ? JSON.parse(JSON.stringify(STATE.all.filter(function (x) { return String(x.id) === String(id); })[0])) : blankCompany();
+    EDITING = c;
     $('#modalTitle').textContent = id ? ('업체 수정 · ' + c.업체명) : '신규 업체 추가';
     $('#f_id').value = c.id || '';
     $('#f_soan').value = c.소속원문 || '';
@@ -289,6 +360,16 @@
     $('#f_note').value = c.비고 || '';
     $('#f_web').value = c.웹활용 || '';
     DELIV_FIELDS.forEach(function (k) { $('#f_' + k).value = c[k] || ''; });
+    $('#f_rep').value = c.대표자 || '';
+    $('#f_corp').value = c.법인 || '';
+    $('#f_inv').value = c.계산서형태 || '';
+    $('#f_invhow').value = c.수신방법 || '';
+    $('#f_invnote').value = c.계산서비고 || '';
+    $('#f_c1').value = c.계약서1 || '';
+    $('#f_c2').value = c.계약서2 || '';
+    $('#f_bizdoc').value = c.사업자등록증 || '';
+    $('#f_cexc').value = c.계약제외 || '';
+    $('#f_connote').value = c.계약비고 || '';
     $('#deleteBtn').style.display = id ? 'inline-block' : 'none';
     updatePreview();
     $('#overlay').classList.add('open');
@@ -326,7 +407,8 @@
       '</b>' + (inc ? ' · <b>인센티브</b>' : '') + ' · 무선개통전달은 판매점/협력점 항상 <b>Y</b>';
   }
   function collectForm() {
-    var c = blankCompany();
+    // 수정 시 원본에서 시작해 폼에 없는 필드(출처 등)를 보존
+    var c = EDITING ? JSON.parse(JSON.stringify(EDITING)) : blankCompany();
     c.id = $('#f_id').value || '';
     c.소속원문 = $('#f_soan').value.trim();
     c.업체명 = $('#f_name').value.trim() || companyName(c.소속원문);
@@ -341,6 +423,16 @@
     c.상태 = $('#f_status').value;
     c.비고 = $('#f_note').value.trim();
     DELIV_FIELDS.forEach(function (k) { c[k] = $('#f_' + k).value; });
+    c.대표자 = $('#f_rep').value.trim();
+    c.법인 = $('#f_corp').value;
+    c.계산서형태 = $('#f_inv').value;
+    c.수신방법 = $('#f_invhow').value.trim();
+    c.계산서비고 = $('#f_invnote').value.trim();
+    c.계약서1 = $('#f_c1').value;
+    c.계약서2 = $('#f_c2').value;
+    c.사업자등록증 = $('#f_bizdoc').value;
+    c.계약제외 = $('#f_cexc').value;
+    c.계약비고 = $('#f_connote').value.trim();
     return c;
   }
 
@@ -393,10 +485,17 @@
     $('#fltMarker').value = STATE.filter.marker;
     $('#fltWeb').value = STATE.filter.web;
     $('#fltStatus').value = STATE.filter.status;
+    $('#fltInv').value = STATE.filter.inv;
+  }
+
+  function setView(v) {
+    VIEW = v;
+    $$('.tab-btn').forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-view') === v); });
+    applyFilter();
   }
 
   function load() {
-    $('#tbody').innerHTML = '<tr><td colspan="14" class="empty"><span class="spin"></span> 불러오는 중…</td></tr>';
+    $('#tbody').innerHTML = '<tr><td colspan="' + VIEW_COLS[VIEW] + '" class="empty"><span class="spin"></span> 불러오는 중…</td></tr>';
     return apiList().then(function (list) {
       STATE.all = list.map(function (c) { // 숫자화
         c.계정수 = c.계정수 === '' ? '' : (Number(c.계정수) || c.계정수);
@@ -405,7 +504,7 @@
       applyFilter();
     }).catch(function (e) {
       if (/unauthorized/i.test(e.message)) { forceLogin('세션이 만료됐어요. 다시 로그인해 주세요.'); return; }
-      $('#tbody').innerHTML = '<tr><td colspan="14" class="empty">불러오기 실패: ' + esc(e.message) + '</td></tr>';
+      $('#tbody').innerHTML = '<tr><td colspan="' + VIEW_COLS[VIEW] + '" class="empty">불러오기 실패: ' + esc(e.message) + '</td></tr>';
       toast('데이터 불러오기 실패', 'err');
     });
   }
@@ -423,9 +522,13 @@
     $('#fltMarker').addEventListener('change', function () { STATE.filter.marker = this.value; applyFilter(); });
     $('#fltWeb').addEventListener('change', function () { STATE.filter.web = this.value; applyFilter(); });
     $('#fltStatus').addEventListener('change', function () { STATE.filter.status = this.value; applyFilter(); });
+    $('#fltInv').addEventListener('change', function () { STATE.filter.inv = this.value; applyFilter(); });
     $('#resetBtn').addEventListener('click', function () {
-      STATE.filter = { gubun: '', marker: '', web: '', status: '', q: '' };
+      STATE.filter = { gubun: '', marker: '', web: '', status: '', inv: '', q: '' };
       $('#search').value = ''; syncControls(); applyFilter();
+    });
+    $$('.tab-btn').forEach(function (b) {
+      b.addEventListener('click', function () { setView(b.getAttribute('data-view')); });
     });
     $('#addBtn').addEventListener('click', function () { openModal(null); });
     $('#importBtn').addEventListener('click', importSeed);

@@ -48,8 +48,12 @@ header.top .spacer { flex: 1; }
 .btn:disabled { opacity: .45; cursor: not-allowed; }
 .btn.sm { padding: 5px 10px; font-size: 12px; }
 
+/* View tabs */
+.tabs { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+.tab-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
 /* Stat cards */
-.stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 16px; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 16px; }
 .stat { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; cursor: pointer; transition: .12s; }
 .stat:hover { border-color: var(--accent); }
 .stat.active { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
@@ -94,6 +98,14 @@ tbody tr:hover { background: rgba(79,140,255,.06); }
 .chip.status-활성 { background: rgba(51,195,126,.14); color: var(--green); }
 .chip.status-보류 { background: rgba(255,176,32,.14); color: var(--amber); }
 .chip.inc { background: rgba(155,140,255,.16); color: var(--own); }
+.chip.i-정발행 { background: rgba(79,140,255,.16); color: var(--partner); }
+.chip.i-역발행 { background: rgba(240,136,62,.16); color: var(--sales); }
+.chip.i-원천세 { background: rgba(255,176,32,.16); color: var(--amber); }
+.chip.i-기타 { background: rgba(147,160,189,.16); color: var(--muted); }
+.stat.inv1 .n { color: var(--partner); }
+.stat.inv2 .n { color: var(--sales); }
+.stat.inv3 .n { color: var(--amber); }
+.note-cell { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* delivery cells */
 .yn { font-weight: 800; }

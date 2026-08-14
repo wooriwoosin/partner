@@ -38,6 +38,12 @@
 
     <div id="stats" class="stats"></div>
 
+    <div class="tabs">
+      <button class="btn sm tab-btn active" data-view="base">기본 정보</button>
+      <button class="btn sm tab-btn" data-view="invoice">🧾 계산서</button>
+      <button class="btn sm tab-btn" data-view="contract">📝 전자계약</button>
+    </div>
+
     <div class="toolbar">
       <input id="search" type="search" placeholder="업체명 · 소속 · 아이디 · 연락처 검색" />
       <select id="fltMarker" title="전달마커">
@@ -56,30 +62,21 @@
         <option value="활성">활성</option>
         <option value="보류">보류(정리대상)</option>
       </select>
+      <select id="fltInv" title="계산서형태">
+        <option value="">계산서(전체)</option>
+        <option value="정발행">정발행</option>
+        <option value="역발행">역발행</option>
+        <option value="원천세">원천세</option>
+        <option value="기타">기타</option>
+        <option value="__none">계산서정보 없음</option>
+      </select>
       <button id="resetBtn" class="btn ghost sm">필터 초기화</button>
       <span id="count" class="count"></span>
     </div>
 
     <div class="table-wrap">
       <table>
-        <thead>
-          <tr>
-            <th>업체 / 소속(원문)</th>
-            <th>구분</th>
-            <th>마커</th>
-            <th>소통채널</th>
-            <th title="웹활용">웹</th>
-            <th title="어드민 접수 대행">접수</th>
-            <th title="유선 접수이력 전달">유선접수</th>
-            <th title="유선 개통완료 전달">유선개통</th>
-            <th title="무선 개통완료 전달(항상)">무선개통</th>
-            <th title="회신내용 전달">회신</th>
-            <th title="계정수">계정</th>
-            <th>상태</th>
-            <th>비고</th>
-            <th></th>
-          </tr>
-        </thead>
+        <thead id="thead"></thead>
         <tbody id="tbody"></tbody>
       </table>
     </div>
@@ -165,6 +162,58 @@
             <label>연락처</label>
             <input id="f_tel" />
           </div>
+          <div class="field">
+            <label>대표자</label>
+            <input id="f_rep" />
+          </div>
+          <div class="field">
+            <label>법인 (계산서 발행)</label>
+            <select id="f_corp">
+              <option value="">-</option>
+              <option value="웨이브넷">웨이브넷</option>
+              <option value="우성">우성</option>
+              <option value="우신">우신</option>
+            </select>
+          </div>
+
+          <div class="deliv-group">
+            <div class="gh">🧾 계산서 방식</div>
+            <div class="grid2" style="margin-bottom:8px">
+              <div class="field">
+                <label>계산서형태</label>
+                <select id="f_inv">
+                  <option value="">-</option>
+                  <option value="정발행">정발행</option>
+                  <option value="역발행">역발행</option>
+                  <option value="원천세">원천세</option>
+                  <option value="기타">기타</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>수신방법 (예: 카톡/엑셀 · 채널/이미지 · 메일/엑셀)</label>
+                <input id="f_invhow" />
+              </div>
+            </div>
+            <div class="field full">
+              <label>계산서 비고 (발송 규칙 등)</label>
+              <textarea id="f_invnote" rows="2"></textarea>
+            </div>
+          </div>
+
+          <div class="deliv-group">
+            <div class="gh">📝 전자계약</div>
+            <div class="toggles" style="margin-bottom:8px">
+              <div class="toggle"><label>계약서①</label><select id="f_c1"><option value="">-</option><option value="Y">Y</option><option value="N">N</option></select></div>
+              <div class="toggle"><label>계약서②</label><select id="f_c2"><option value="">-</option><option value="Y">Y</option><option value="N">N</option></select></div>
+              <div class="toggle"><label>사업자등록증</label><select id="f_bizdoc"><option value="">-</option><option value="Y">Y</option><option value="N">N</option></select></div>
+              <div class="toggle"><label>계약제외</label><select id="f_cexc"><option value="">-</option><option value="Y">Y</option><option value="N">N</option></select></div>
+            </div>
+            <div class="field full">
+              <label>계약 비고 (만료/톡안봄 등)</label>
+              <textarea id="f_connote" rows="2"></textarea>
+            </div>
+          </div>
+
           <div class="field full">
             <label>비고</label>
             <textarea id="f_note" rows="2"></textarea>
