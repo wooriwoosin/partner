@@ -67,13 +67,43 @@ function sheet_(name, headers) {
 function logSheet_() { return sheet_(LOG_SHEET, LOG_HEADERS); }
 function dataSheet_() {
   var sh = sheet_(SHEET_NAME, HEADERS);
-  // 시트에 없는 컬럼만 "뒤에" 추가 — 기존 열 순서·데이터는 절대 건드리지 않음
   var hdr = sheetHeader_(sh);
+
+  // 헤더가 새 구조가 아니면(구버전 배포가 덮어썼을 때) 자동 복구 시도
+  if (hdr[1] !== '업체명' || hdr[7] !== '상태') {
+    if (autoRepairHeader_(sh)) hdr = sheetHeader_(sh);
+  }
+
+  // 시트에 없는 컬럼만 "뒤에" 추가 — 기존 열 순서·데이터는 절대 건드리지 않음
   var missing = HEADERS.filter(function (h) { return hdr.indexOf(h) < 0; });
   if (missing.length) {
     sh.getRange(1, hdr.length + 1, 1, missing.length).setValues([missing]);
   }
   return sh;
+}
+
+// 데이터가 새 순서인지 확인한 뒤에만 헤더 이름을 되돌린다.
+// (구버전 배포가 헤더를 옛 이름으로 덮어쓰는 사고를 스스로 회복하기 위함)
+function autoRepairHeader_(sh) {
+  var last = sh.getLastRow();
+  if (last < 2) return false;
+  // 새 순서라면 8번째 열은 '상태'(활성/휴면), 옛 순서라면 '소통채널'(카카오톡…/어드민)
+  var probe = sh.getRange(2, 8, Math.min(30, last - 1), 1).getValues();
+  var newHits = 0, oldHits = 0;
+  probe.forEach(function (r) {
+    var v = String(r[0] || '').trim();
+    if (v === '활성' || v === '휴면' || v === '보류') newHits++;
+    else if (v.indexOf('카카오') >= 0 || v === '어드민') oldHits++;
+  });
+  if (newHits === 0 || oldHits > newHits) return false;  // 애매하면 손대지 않음
+
+  var lastCol = sh.getLastColumn();
+  sh.getRange(1, 1, 1, HEADERS.length).setValues([HEADERS]);
+  if (lastCol > HEADERS.length) {
+    sh.getRange(1, HEADERS.length + 1, 1, lastCol - HEADERS.length).clearContent();
+  }
+  sh.setFrozenRows(1);
+  return true;
 }
 
 // 시트 1행(헤더) 배열
