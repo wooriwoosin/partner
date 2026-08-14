@@ -1161,14 +1161,18 @@ function dlOne(i){const r=results[i];if(!r?.ok)return;const url=URL.createObject
     }
   }
 
-  // 기본 updCsvUI(내장 DB 개수 표시)를 연동 대기 화면으로 대체
+  // '내장 DB (N개)' 표시를 연동 대기 화면으로 덮어씀
+  // ※ 원본이 DOMContentLoaded 리스너로 이미 등록돼 있어 함수 교체만으론 부족 —
+  //    원본 리스너보다 늦게 등록해 원본 실행 직후 같은 틱에 덮어쓴다 (깜빡임 없음)
+  function waitBadge_() {
+    var b = document.getElementById('csvBadge'), m = document.getElementById('csvMsg');
+    if (b) { b.textContent = '메인 DB 연동 중…'; b.className = 'csv-badge'; }
+    if (m) { m.textContent = '업체 관리앱의 메인 DB에서 계산서방식을 불러옵니다'; m.className = 'csv-msg'; }
+  }
   try {
-    updCsvUI = function () {
-      var b = document.getElementById('csvBadge'), m = document.getElementById('csvMsg');
-      if (b) { b.textContent = '메인 DB 연동 중…'; b.className = 'csv-badge'; }
-      if (m) { m.textContent = '업체 관리앱의 메인 DB에서 계산서방식을 불러옵니다'; m.className = 'csv-msg'; }
-    };
-    if (document.readyState !== 'loading') updCsvUI();
+    updCsvUI = waitBadge_;
+    document.addEventListener('DOMContentLoaded', waitBadge_);
+    if (document.readyState !== 'loading') waitBadge_();
   } catch (e) {}
 
   var CFG = window.APP_CONFIG || {};
