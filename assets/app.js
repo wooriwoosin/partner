@@ -10,6 +10,11 @@
     ROLE = localStorage.getItem('partner_role') || '';
   } catch (e) {}
   function isAdmin() { return ROLE === 'admin'; }
+  var SERVER_VER = '';   // 서버(Apps Script)가 알려주는 코드 버전
+  function checkServerVersion() {
+    var el = document.getElementById('verWarn');
+    if (el) el.style.display = (LIVE && !SERVER_VER) ? '' : 'none';
+  }
 
   /* ============ 분류 엔진 (build_seed.py 와 동일 규칙) ============ */
   var SALES_SYMS = ['■■', '□□', '■', '□'];
@@ -78,7 +83,11 @@
     }
     return fetch(CFG.API_URL + '?action=list&token=' + encodeURIComponent(TOKEN), { method: 'GET' })
       .then(function (r) { return r.json(); })
-      .then(function (d) { if (!d.ok) throw new Error(d.error || 'list 실패'); return d.companies || []; });
+      .then(function (d) {
+        if (!d.ok) throw new Error(d.error || 'list 실패');
+        SERVER_VER = d.ver || '';   // 구버전 배포는 ver 자체를 안 보냄
+        return d.companies || [];
+      });
   }
   function apiPost(payload) {
     payload.token = TOKEN;
@@ -344,13 +353,12 @@
   }
 
   var THEADS = {
-    base: '<tr><th>업체 / 소속(원문)</th><th>구분</th><th>마커</th><th>소통채널</th>' +
-      '<th>웹접수</th><th>웹회신</th>' +
-      '<th title="계정수">계정</th><th>상태</th><th>비고</th><th></th></tr>',
+    base: '<tr><th>업체 / 소속(원문)</th><th>구분</th><th>대표자</th><th>연락처</th><th>마커</th>' +
+      '<th>웹접수</th><th>웹회신</th><th>소통채널</th><th>상태</th><th>비고</th><th></th></tr>',
     invoice: '<tr><th>기호</th><th>업체 / 소속(원문)</th><th>구분</th><th>법인</th><th>계산서형태</th><th>수신방법</th><th>사업자</th><th>계산서 비고</th><th></th></tr>',
     contract: '<tr><th>업체 / 소속(원문)</th><th>구분</th><th>계약상태</th><th>대표자</th><th>연락처</th><th>위탁판매</th><th>개인정보</th><th>보증보험</th><th>계약 비고</th><th></th></tr>'
   };
-  var VIEW_COLS = { base: 10, invoice: 9, contract: 10 };
+  var VIEW_COLS = { base: 11, invoice: 9, contract: 10 };
   var CON_CHIP = { 완료: 'status-활성', 진행중: 'g-자점', 미진행: 'g-판매점', 만료: 'status-보류', 제외: 'm-X', 정보없음: 'i-기타' };
 
   function nameCell(c) {
@@ -364,11 +372,12 @@
   function rowBase(c) {
     var mk = c.전달마커 || '';
     return nameCell(c) +
+      '<td>' + esc(c.대표자 || '') + '</td>' +
+      '<td>' + esc(c.연락처 || '') + '</td>' +
       '<td>' + (mk ? '<span class="chip m-' + esc(mk) + '">' + esc(mk) + '</span>' : '<span class="yn blank">–</span>') + '</td>' +
-      '<td>' + esc(c.소통채널 || '') + '</td>' +
       '<td style="text-align:center">' + yn(c.웹접수) + '</td>' +
       '<td style="text-align:center">' + yn(c.웹회신) + '</td>' +
-      '<td style="text-align:center">' + esc(c.계정수 || '') + '</td>' +
+      '<td>' + esc(c.소통채널 || '') + '</td>' +
       '<td><span class="chip status-' + esc(c.상태) + '">' + esc(c.상태 === '휴면' ? '휴면(미거래)' : c.상태) + '</span></td>' +
       '<td class="note-cell" title="' + esc(c.비고 || '') + '">' + esc(c.비고 || '') + '</td>';
   }
@@ -876,6 +885,7 @@
         }
         return c;
       });
+      checkServerVersion();
       populateSymFilter();
       applyFilter();
     }).catch(function (e) {

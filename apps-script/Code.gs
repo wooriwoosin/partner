@@ -10,6 +10,9 @@
  *   - 비밀번호는 해시로 저장(평문 저장 안 함)
  */
 
+// 배포된 코드 버전 — 프론트가 이 값으로 "구버전 배포"를 감지해 경고를 띄웁니다.
+var CODE_VERSION = '2026-08-14b';
+
 var SPREADSHEET_ID = '1shhA5RdXP7DiaMIyR33bTG2jFj4SFqumYflY0lF0pwc';
 var SHEET_NAME = '업체관리';
 var USER_SHEET = '사용자';
@@ -308,9 +311,9 @@ function doGet(e) {
   try {
     ensureAdmin_();
     var action = p.action || 'ping';
-    if (action === 'ping') return json_({ ok: true, sheet: SHEET_NAME, hasUsers: readUsers_().length > 0 }, cb);
+    if (action === 'ping') return json_({ ok: true, ver: CODE_VERSION, sheet: SHEET_NAME, hasUsers: readUsers_().length > 0 }, cb);
     if (action === 'hasUsers') return json_({ ok: true, hasUsers: readUsers_().length > 0 }, cb);
-    if (action === 'list') { requireAuth_(p.token); return json_({ ok: true, count: readAll_().length, companies: readAll_() }, cb); }
+    if (action === 'list') { requireAuth_(p.token); var lst = readAll_(); return json_({ ok: true, ver: CODE_VERSION, count: lst.length, companies: lst }, cb); }
     return json_({ ok: false, error: 'unknown action: ' + action }, cb);
   } catch (err) { return json_({ ok: false, error: String(err && err.message || err) }, cb); }
 }
@@ -327,7 +330,7 @@ function doPost(e) {
     if (action === 'registerFirstAdmin') return json_(registerFirstAdmin_(body.id, body.pw, body.name));
 
     // 이하 로그인 필요
-    if (action === 'list') { requireAuth_(body.token); return json_({ ok: true, companies: readAll_() }); }
+    if (action === 'list') { requireAuth_(body.token); return json_({ ok: true, ver: CODE_VERSION, companies: readAll_() }); }
     if (action === 'upsert') { var uU = requireAuth_(body.token); return json_(upsert_(body.company, uU)); }
     if (action === 'delete') { var uD = requireAuth_(body.token); return json_(remove_(body.id, uD)); }
     if (action === 'bulkImport') { var uB = requireAuth_(body.token); return json_(bulkImport_(body.companies, body.replace, uB)); }
@@ -445,6 +448,55 @@ function 계정추가_직접(id, pw, name, role) {
 }
 
 function setup() { dataSheet_(); userSheet_(); return 'ok'; }
+
+/* ============================================================
+ * 헤더복구() — 구버전 배포가 헤더 행을 옛 이름으로 덮어썼을 때 복구
+ * ------------------------------------------------------------
+ * 데이터 행은 그대로 두고 1행(헤더)만 올바른 이름으로 되돌립니다.
+ * 먼저 데이터가 어떤 순서인지 진단한 뒤, 새 순서일 때만 복구합니다.
+ * ============================================================ */
+function 헤더복구() {
+  var sh = ss_().getSheetByName(SHEET_NAME);
+  if (!sh) throw new Error(SHEET_NAME + ' 탭이 없습니다.');
+  var last = sh.getLastRow();
+  if (last < 2) throw new Error('데이터가 없습니다.');
+
+  // 8번째 열 값으로 데이터 순서 판별
+  //  · 새 순서(정리 후) → 8번째는 '상태'   : 활성 / 휴면
+  //  · 옛 순서          → 8번째는 '소통채널': 카카오톡… / 어드민
+  var probe = sh.getRange(2, 8, Math.min(30, last - 1), 1).getValues();
+  var newHits = 0, oldHits = 0;
+  probe.forEach(function (r) {
+    var v = String(r[0] || '').trim();
+    if (v === '활성' || v === '휴면' || v === '보류') newHits++;
+    else if (v.indexOf('카카오') >= 0 || v === '어드민') oldHits++;
+  });
+
+  if (oldHits > newHits) {
+    var m1 = '데이터가 아직 "옛 순서"입니다. 헤더복구 대신 [시트정리]를 실행하세요.\n'
+      + '(8번째 열 진단: 옛 순서 ' + oldHits + '건 / 새 순서 ' + newHits + '건)';
+    Logger.log(m1); return m1;
+  }
+  if (newHits === 0) {
+    var m2 = '데이터 순서를 판별하지 못했습니다. 시트를 직접 확인해 주세요.\n'
+      + '8번째 열이 상태(활성/휴면)여야 정상입니다.';
+    Logger.log(m2); return m2;
+  }
+
+  // 1행을 올바른 헤더로 되돌리고, 남아 있는 옛 헤더 잔여 칸은 비움
+  var lastCol = sh.getLastColumn();
+  sh.getRange(1, 1, 1, HEADERS.length).setValues([HEADERS]);
+  if (lastCol > HEADERS.length) {
+    sh.getRange(1, HEADERS.length + 1, 1, lastCol - HEADERS.length).clearContent();
+  }
+  sh.setFrozenRows(1);
+
+  var msg = '헤더 복구 완료 · 컬럼 ' + HEADERS.length + '개 (데이터 ' + (last - 1) + '행은 그대로)\n'
+    + '이제 반드시 [배포 → 배포 관리 → 새 버전]으로 최신 코드를 배포하세요. '
+    + '구버전이 배포된 상태면 헤더가 다시 망가집니다.';
+  Logger.log(msg);
+  return msg;
+}
 
 /* ============================================================
  * 시트정리() — 편집기에서 1회 실행

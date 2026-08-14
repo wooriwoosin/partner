@@ -49,6 +49,12 @@ header.top .spacer { flex: 1; }
 .btn:disabled { opacity: .45; cursor: not-allowed; }
 .btn.sm { padding: 5px 10px; font-size: 12px; }
 
+/* 구버전 배포 경고 */
+.ver-warn {
+  background: #fff4f4; border: 1px solid #f3c2c2; color: #b3261e;
+  border-radius: 10px; padding: 11px 14px; margin-bottom: 14px; font-size: 13px; line-height: 1.6;
+}
+
 /* View tabs */
 .tabs { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
 .tab-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
