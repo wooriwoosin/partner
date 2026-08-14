@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>정산내역서 가공 앱 v6</title>
+<title>정산내역서 가공</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/fflate@0.8.2/umd/index.js"></script>
 <style>
@@ -141,7 +141,7 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg);colo
       <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6z"/><path d="M14 2v6h6M9 13h6M9 17h4" stroke="rgba(255,255,255,.65)" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>
     </div>
     <div>
-      <div class="htit">정산내역서 가공 앱 <span style="font-size:12px;color:var(--t3);font-weight:500">v6</span></div>
+      <div class="htit">정산내역서 가공</div>
       <div class="hsub">업체별 계산서 방식 자동 감지 · 세금계산서 / 원천세 자동 분류 · 환수 자동 합산 · xlsx · xls 지원</div>
     </div>
   </div>
@@ -1161,13 +1161,23 @@ function dlOne(i){const r=results[i];if(!r?.ok)return;const url=URL.createObject
     }
   }
 
+  // 기본 updCsvUI(내장 DB 개수 표시)를 연동 대기 화면으로 대체
+  try {
+    updCsvUI = function () {
+      var b = document.getElementById('csvBadge'), m = document.getElementById('csvMsg');
+      if (b) { b.textContent = '메인 DB 연동 중…'; b.className = 'csv-badge'; }
+      if (m) { m.textContent = '업체 관리앱의 메인 DB에서 계산서방식을 불러옵니다'; m.className = 'csv-msg'; }
+    };
+    if (document.readyState !== 'loading') updCsvUI();
+  } catch (e) {}
+
   var CFG = window.APP_CONFIG || {};
   if (!CFG.API_URL) return;
   var token = '';
   try { token = localStorage.getItem('partner_token') || ''; } catch (e) {}
   var badge = document.getElementById('csvBadge'), msg = document.getElementById('csvMsg');
   if (!token) {
-    if (msg) msg.innerHTML = '💡 업체 관리앱에 로그인하면 메인 DB의 계산서방식을 자동으로 불러옵니다 (지금은 내장 DB 사용 중)';
+    if (msg) msg.innerHTML = '💡 업체 관리앱에 로그인하면 메인 DB의 계산서방식을 자동으로 불러옵니다';
     return;
   }
   fetch(CFG.API_URL + '?action=list&token=' + encodeURIComponent(token))
@@ -1181,7 +1191,7 @@ function dlOne(i){const r=results[i];if(!r?.ok)return;const url=URL.createObject
         if (name && t) { map[name] = t; n++; }
       });
       if (!n) {
-        if (msg) msg.innerHTML = '메인 DB에 계산서형태 데이터가 아직 없습니다 — 업체 관리앱에서 <b>[②③ 데이터 병합]</b>을 먼저 실행하세요 (내장 DB 사용 중)';
+        if (msg) msg.innerHTML = '메인 DB에 계산서형태 데이터가 아직 없습니다 — 관리앱에서 계산서 정보를 채워주세요';
         return;
       }
       Object.assign(PARTNER_MAP, map); // 내장 DB 위에 메인 DB 값을 덮어씀
@@ -1191,7 +1201,7 @@ function dlOne(i){const r=results[i];if(!r?.ok)return;const url=URL.createObject
       if (typeof renderList === 'function') renderList();
     })
     .catch(function (e) {
-      if (msg) msg.innerHTML = '메인 DB 연동 실패(' + e.message + ') — 내장/CSV DB로 동작합니다';
+      if (msg) msg.innerHTML = '메인 DB 연동 실패(' + e.message + ') — 다시 열면 재시도합니다';
     });
 })();
 </script>

@@ -567,8 +567,10 @@
       if (classify(raw) === '자점') { own++; continue; } // 자점은 등록/현행화 대상 아님
       var ex = byKey[key];
       if (ex) {
-        // 이름은 같은데 기호/소속 원문이 달라짐 → 현행화 후보
-        if (String(ex.소속원문 || '').trim() !== raw) {
+        // 기호/소속이 달라졌거나, 휴면 업체에 개통건 발생(→활성 전환) → 현행화 후보
+        var soanChanged = String(ex.소속원문 || '').trim() !== raw;
+        var wake = ex.상태 === '휴면';
+        if (soanChanged || wake) {
           var g2 = classify(raw);
           changes.push({
             id: ex.id, 업체명: ex.업체명,
@@ -576,6 +578,7 @@
             old기호: ex.기호 || '', new기호: leadSymbol(raw),
             old구분: ex.업체구분 || '', new구분: g2 === '미분류' ? (ex.업체구분 || '') : g2,
             oldInc: ex.인센티브 || 'N', newInc: isIncentive(raw) ? 'Y' : 'N',
+            soanChanged: soanChanged, wake: wake,
             checked: true
           });
         } else same++;
@@ -623,10 +626,13 @@
     $('#upChgWrap').style.display = '';
     $('#upChgTbody').innerHTML = chgs.map(function (c, i) {
       var diffs = [];
-      if (c.old기호 !== c.new기호) diffs.push('기호 ' + (c.old기호 || '없음') + '→' + (c.new기호 || '없음'));
-      if (c.old구분 !== c.new구분) diffs.push('구분 ' + (c.old구분 || '?') + '→' + (c.new구분 || '?'));
-      if (c.oldInc !== c.newInc) diffs.push('인센티브 ' + c.oldInc + '→' + c.newInc);
-      if (!diffs.length) diffs.push('표기 변경');
+      if (c.wake) diffs.push('💤 휴면→활성 (개통 발생)');
+      if (c.soanChanged) {
+        if (c.old기호 !== c.new기호) diffs.push('기호 ' + (c.old기호 || '없음') + '→' + (c.new기호 || '없음'));
+        if (c.old구분 !== c.new구분) diffs.push('구분 ' + (c.old구분 || '?') + '→' + (c.new구분 || '?'));
+        if (c.oldInc !== c.newInc) diffs.push('인센티브 ' + c.oldInc + '→' + c.newInc);
+        if (diffs.length === (c.wake ? 1 : 0)) diffs.push('표기 변경');
+      }
       return '<tr><td><input type="checkbox" class="up-chg-chk" data-i="' + i + '"' + (c.checked ? ' checked' : '') + '></td>' +
         '<td>' + esc(c.업체명) + '</td><td>' + esc(c.old소속) + '</td><td><b>' + esc(c.raw) + '</b></td>' +
         '<td>' + esc(diffs.join(' · ')) + '</td></tr>';
@@ -672,12 +678,16 @@
         상태: '활성', 출처: '개통리스트'
       };
     });
-    // 현행화: 소속/기호/구분/인센티브/마커만 갱신 (전달 체크리스트·계산서·계약 값은 유지)
+    // 현행화: 소속/기호/구분/인센티브/마커만 갱신 (계산서·계약 값은 유지)
+    // 휴면 업체에 개통건이 있으면 상태를 활성으로 자동 전환
     var updates = pickedChg.map(function (c) {
-      return {
-        id: c.id, 소속원문: c.raw, 기호: c.new기호, 업체구분: c.new구분,
-        인센티브: c.newInc, 전달마커: markerFromName(c.raw)
-      };
+      var u = { id: c.id };
+      if (c.soanChanged) {
+        u.소속원문 = c.raw; u.기호 = c.new기호; u.업체구분 = c.new구분;
+        u.인센티브 = c.newInc; u.전달마커 = markerFromName(c.raw);
+      }
+      if (c.wake) u.상태 = '활성';
+      return u;
     });
 
     $('#upSave').disabled = true;
