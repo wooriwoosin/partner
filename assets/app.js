@@ -603,7 +603,7 @@
   }
 
   /* ============ 개통리스트 업로드 → 신규 등록 + 기호/소속 현행화 ============ */
-  var UP = { grid: [], headerRow: -1, colIdx: -1, candidates: [], changes: [] };
+  var UP = { grid: [], headerRow: -1, colIdx: -1, markerCol: -1, candidates: [], changes: [] };
 
   // 중복 비교용 키: 숫자접두/기호/마커괄호/공백 제거 + 소문자
   function normKey(s) {
@@ -616,7 +616,7 @@
   }
 
   function openUpload() {
-    UP = { grid: [], headerRow: -1, colIdx: -1, candidates: [], changes: [] };
+    UP = { grid: [], headerRow: -1, colIdx: -1, markerCol: -1, candidates: [], changes: [] };
     $('#upFile').value = '';
     $('#upColWrap').style.display = 'none';
     $('#upSummary').style.display = 'none';
@@ -626,39 +626,125 @@
     $('#uploadOverlay').classList.add('open');
   }
 
+  // 한글 인코딩 자동 판별 (UTF-8 → 깨지면 EUC-KR)
+  function decodeKo(buf) {
+    try {
+      var t = new TextDecoder('utf-8', { fatal: false }).decode(buf);
+      if (t.indexOf('\uFFFD') < 0) return t;
+    } catch (e) {}
+    try { return new TextDecoder('euc-kr').decode(buf); } catch (e) {}
+    try { return new TextDecoder('utf-8').decode(buf); } catch (e) {}
+    return '';
+  }
+
   function handleUploadFile(file) {
     if (!file) return;
     if (typeof XLSX === 'undefined') { toast('엑셀 라이브러리 로드 실패 — 인터넷 연결을 확인하세요', 'err'); return; }
     var reader = new FileReader();
     reader.onload = function (e) {
       try {
-        var wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+        var buf = e.target.result;
+        var bytes = new Uint8Array(buf);
+        var head = '';
+        for (var i = 0; i < Math.min(bytes.length, 300); i++) head += String.fromCharCode(bytes[i]);
+        var wb;
+        if (/<\s*(table|html|meta|body)/i.test(head)) {
+          // 확장자만 xls 인 HTML 표 (웹 시스템 다운로드본) — 인코딩 판별 후 파싱
+          wb = XLSX.read(decodeKo(buf), { type: 'string' });
+        } else {
+          // 구형 xls 는 한글 코드페이지(949) 지정해야 안 깨짐
+          wb = XLSX.read(bytes, { type: 'array', codepage: 949 });
+        }
         var ws = wb.Sheets[wb.SheetNames[0]];
         UP.grid = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+        if (!UP.grid.length) { toast('파일에서 데이터를 찾지 못했습니다', 'err'); return; }
         detectColumn();
       } catch (err) { toast('파일을 읽지 못했습니다: ' + err.message, 'err'); }
     };
     reader.readAsArrayBuffer(file);
   }
 
-  // '소속' 열 자동 탐지 (상위 10행에서 헤더 검색)
+  var NAME_HEADERS = ['협력점', '소속', '소속점', '업체', '업체명', '거래처', '판매점', '대리점', '매장', '상호', '상호명'];
+  var MARKER_HEADERS = ['유치자', '담당자', '담당', '영업사원', '사원'];
+
+  function cellAt(r, c) { return String((UP.grid[r] || [])[c] || '').trim(); }
+
+  // 값이 "업체 소속"처럼 생겼는지 점수화 (헤더 이름이 깨졌을 때의 대비책)
+  function colScore(colIdx, startRow, existing) {
+    var score = 0, seen = 0;
+    for (var r = startRow; r < Math.min(UP.grid.length, startRow + 300); r++) {
+      var v = cellAt(r, colIdx);
+      if (!v) continue;
+      seen++;
+      if (/^[■□★☆◆◇]/.test(v)) score += 3;          // 기호로 시작 = 업체 소속
+      else if (existing[normKey(v)]) score += 3;       // 기존 업체명과 일치
+    }
+    return seen ? score : -1;
+  }
+
+  // 업체(소속) 열 자동 탐지 — ① 헤더 이름 정확 매칭 → ② 값의 생김새
   function detectColumn() {
-    var re = /소속|업체|거래처|판매점|협력/;
-    for (var r = 0; r < Math.min(UP.grid.length, 10); r++) {
-      for (var c = 0; c < UP.grid[r].length; c++) {
-        if (re.test(String(UP.grid[r][c]))) { UP.headerRow = r; UP.colIdx = c; buildCandidates(); return; }
+    var existing = {};
+    STATE.all.forEach(function (x) {
+      existing[normKey(x.업체명)] = 1;
+      existing[normKey(x.소속원문)] = 1;
+    });
+    var maxCols = 0;
+    UP.grid.forEach(function (r) { if (r && r.length > maxCols) maxCols = r.length; });
+
+    UP.headerRow = 0; UP.colIdx = -1; UP.markerCol = -1;
+
+    // ① 헤더 이름이 정확히 일치하는 칸 찾기 (데이터 값에 "협력점★"처럼 섞여 있어도 오인하지 않음)
+    for (var hr = 0; hr < Math.min(UP.grid.length, 10) && UP.colIdx < 0; hr++) {
+      for (var c = 0; c < maxCols; c++) {
+        var h = cellAt(hr, c).replace(/\s+/g, '');
+        if (NAME_HEADERS.indexOf(h) >= 0) {
+          UP.headerRow = hr; UP.colIdx = c;
+          for (var mc = 0; mc < maxCols; mc++) {
+            if (MARKER_HEADERS.indexOf(cellAt(hr, mc).replace(/\s+/g, '')) >= 0) { UP.markerCol = mc; break; }
+          }
+          break;
+        }
       }
     }
-    // 자동 탐지 실패 → 첫 행을 헤더로 보고 직접 선택
-    UP.headerRow = 0;
-    var opts = (UP.grid[0] || []).map(function (h, i) {
-      return '<option value="' + i + '">' + esc(String(h) || ('열 ' + (i + 1))) + '</option>';
-    }).join('');
-    $('#upCol').innerHTML = opts;
+
+    // ② 못 찾으면 값의 생김새로 판단
+    if (UP.colIdx < 0) {
+      var best = { score: 0, row: 0, col: -1 };
+      for (var hr2 = 0; hr2 < Math.min(UP.grid.length, 7); hr2++) {
+        for (var c2 = 0; c2 < maxCols; c2++) {
+          var sc = colScore(c2, hr2 + 1, existing);
+          if (sc > best.score) best = { score: sc, row: hr2, col: c2 };
+        }
+      }
+      if (best.col >= 0 && best.score >= 15) { UP.headerRow = best.row; UP.colIdx = best.col; }
+    }
+
+    // 선택 UI — 헤더가 깨져도 "실제 값 미리보기"로 고를 수 있게
+    var opts = [];
+    for (var c3 = 0; c3 < maxCols; c3++) {
+      var samples = [];
+      for (var r3 = UP.headerRow + 1; r3 < UP.grid.length && samples.length < 3; r3++) {
+        var v3 = cellAt(r3, c3);
+        if (v3) samples.push(v3.length > 14 ? v3.slice(0, 14) + '…' : v3);
+      }
+      var hn = cellAt(UP.headerRow, c3);
+      var label = (c3 + 1) + '열' + (hn ? ' (' + hn + ')' : '') + ' — ' + (samples.join(', ') || '비어있음');
+      opts.push('<option value="' + c3 + '"' + (c3 === UP.colIdx ? ' selected' : '') + '>' + esc(label) + '</option>');
+    }
+    $('#upCol').innerHTML = opts.join('');
     $('#upColWrap').style.display = '';
-    $('#upSummary').style.display = '';
-    $('#upSummary').textContent = "'소속' 열을 자동으로 찾지 못했어요. 업체명(기호 포함)이 들어있는 열을 선택해 주세요.";
     $('#upCol').onchange = function () { UP.colIdx = Number(this.value); buildCandidates(); };
+
+    if (UP.colIdx < 0) {
+      $('#upSummary').style.display = '';
+      $('#upSummary').innerHTML = '업체명이 들어있는 열을 자동으로 찾지 못했어요. 위에서 <b>실제 값을 보고</b> 직접 골라주세요.';
+      $('#upNewWrap').style.display = 'none';
+      $('#upChgWrap').style.display = 'none';
+      $('#upSave').disabled = true;
+      return;
+    }
+    buildCandidates();
   }
 
   function buildCandidates() {
@@ -678,6 +764,9 @@
       if (!key || seen[key]) continue;
       seen[key] = 1;
       if (classify(raw) === '자점') { own++; continue; } // 자점은 등록/현행화 대상 아님
+      // 전달마커는 '유치자' 열의 (O)/(X) 표기에서 가져온다 (소속 원문에는 없음)
+      var mk = UP.markerCol >= 0 ? markerFromName(cellAt(r, UP.markerCol)) : '';
+      if (!mk) mk = markerFromName(raw);
       var ex = byKey[key];
       if (ex) {
         // 기호/소속이 달라졌거나, 휴면 업체에 개통건 발생(→활성 전환) → 현행화 후보
@@ -691,14 +780,14 @@
             old기호: ex.기호 || '', new기호: leadSymbol(raw),
             old구분: ex.업체구분 || '', new구분: g2 === '미분류' ? (ex.업체구분 || '') : g2,
             oldInc: ex.인센티브 || 'N', newInc: isIncentive(raw) ? 'Y' : 'N',
-            soanChanged: soanChanged, wake: wake,
+            마커: mk, soanChanged: soanChanged, wake: wake,
             checked: true
           });
         } else same++;
         continue;
       }
       var g = classify(raw);
-      cands.push({ 소속원문: raw, 업체명: companyName(raw), 구분: g === '미분류' ? '' : g, checked: true });
+      cands.push({ 소속원문: raw, 업체명: companyName(raw), 구분: g === '미분류' ? '' : g, 마커: mk, checked: true });
     }
     UP.candidates = cands;
     UP.changes = changes;
@@ -719,7 +808,8 @@
     $('#upTbody').innerHTML = cands.map(function (c, i) {
       return '<tr><td><input type="checkbox" class="up-chk" data-i="' + i + '"' + (c.checked ? ' checked' : '') + '></td>' +
         '<td>' + esc(c.소속원문) + '</td><td>' + esc(c.업체명) + '</td>' +
-        '<td>' + (c.구분 ? '<span class="chip g-' + esc(c.구분) + '">' + esc(c.구분) + '</span>' : '<span class="yn blank">미분류</span>') + '</td></tr>';
+        '<td>' + (c.구분 ? '<span class="chip g-' + esc(c.구분) + '">' + esc(c.구분) + '</span>' : '<span class="yn blank">미분류</span>') +
+        (c.마커 ? ' <span class="chip m-' + esc(c.마커) + '">' + esc(c.마커) + '</span>' : '') + '</td></tr>';
     }).join('');
     $$('#upTbody .up-chk').forEach(function (chk) {
       chk.onchange = function () { UP.candidates[Number(chk.getAttribute('data-i'))].checked = chk.checked; updateUpSave(); };
@@ -782,7 +872,7 @@
       var soan = p.소속원문;
       var g = p.구분 || classify(soan);
       if (g === '미분류') g = '';
-      var mk = markerFromName(soan);
+      var mk = p.마커 || markerFromName(soan);
       var d = derive(g, mk);
       return {
         소속원문: soan, 업체명: p.업체명, 기호: leadSymbol(soan), 업체구분: g,
@@ -797,7 +887,7 @@
       var u = { id: c.id };
       if (c.soanChanged) {
         u.소속원문 = c.raw; u.기호 = c.new기호; u.업체구분 = c.new구분;
-        u.인센티브 = c.newInc; u.전달마커 = markerFromName(c.raw);
+        u.인센티브 = c.newInc; u.전달마커 = c.마커 || markerFromName(c.raw);
       }
       if (c.wake) u.상태 = '활성';
       return u;
