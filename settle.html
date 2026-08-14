@@ -1136,7 +1136,7 @@ da.addEventListener('click',async()=>{
 
 function dlOne(i){const r=results[i];if(!r?.ok)return;const url=URL.createObjectURL(r.blob);const a=document.createElement('a');a.href=url;a.download=r.name;document.body.appendChild(a);a.click();document.body.removeChild(a);setTimeout(()=>URL.revokeObjectURL(url),3000);}
 </script>
-<script src="assets/config.js?v=20260815a"></script>
+<script src="assets/config.js?v=20260815b"></script>
 <script>
 /* ═══════════════════════════════════════════
    업체 통합 관리앱(메인 DB) 자동 연동

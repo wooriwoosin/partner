@@ -122,8 +122,8 @@ tbody tr:hover { background: rgba(37,99,235,.05); }
 /* delivery cells */
 .yn { font-weight: 800; }
 .yn.y { color: var(--green); }
-.yn.n { color: #b3bfd0; }
-.yn.blank { color: #ccd5e0; }
+.yn.n { color: #6b7684; }        /* N — 값이 'N'임을 분명히 (연회색이지만 읽히게) */
+.yn.blank { color: #cbd5e1; }     /* 값 없음 */
 
 /* Modal */
 .overlay { position: fixed; inset: 0; background: rgba(15,23,42,.45); display: none; align-items: flex-start; justify-content: center; padding: 40px 16px; z-index: 50; overflow-y: auto; }

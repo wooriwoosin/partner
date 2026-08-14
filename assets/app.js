@@ -263,9 +263,10 @@
   var $ = function (s, el) { return (el || document).querySelector(s); };
   var $$ = function (s, el) { return Array.prototype.slice.call((el || document).querySelectorAll(s)); };
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]; }); }
+  // Y/N 은 글자 그대로 표시한다 (예전엔 N 을 가운뎃점으로 흐리게 그려 '값 없음'과 헷갈렸음)
   function yn(v) {
     if (v === 'Y') return '<span class="yn y">Y</span>';
-    if (v === 'N') return '<span class="yn n">·</span>';
+    if (v === 'N') return '<span class="yn n">N</span>';
     return '<span class="yn blank">–</span>';
   }
 
@@ -1015,7 +1016,7 @@
     $('#logWrap').style.display = isLog ? '' : 'none';
     if (settle) {
       var f = $('#settleFrame');
-      if (!f.getAttribute('src')) f.setAttribute('src', 'settle.html?v=20260815a');
+      if (!f.getAttribute('src')) f.setAttribute('src', 'settle.html?v=20260815b');
       return;
     }
     if (isLog) { loadLogs(); return; }
