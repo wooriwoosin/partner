@@ -334,7 +334,7 @@
       if (f.sym && String(c.기호 || '') !== f.sym) return false;
       if (f.con && conState(c) !== f.con) return false;
       if (q) {
-        var hay = (c.업체명 + ' ' + c.소속원문 + ' ' + (c.대표아이디 || '') + ' ' + (c.연락처 || '') + ' ' + (c.대표자 || '')).toLowerCase();
+        var hay = (c.업체명 + ' ' + c.소속원문 + ' ' + (c.연락처 || '') + ' ' + (c.대표자 || '')).toLowerCase();
         if (hay.indexOf(q) < 0) return false;
       }
       return true;
@@ -416,7 +416,7 @@
 
   /* ============ 모달 ============ */
   function blankCompany() {
-    return { id: '', 소속원문: '', 업체명: '', 기호: '', 업체구분: '', 인센티브: 'N', 전달마커: '', 소통채널: '', 웹접수: '', 웹회신: '', 계정수: '', 대표아이디: '', 연락처: '', 상태: '활성', 비고: '',
+    return { id: '', 소속원문: '', 업체명: '', 기호: '', 업체구분: '', 인센티브: 'N', 전달마커: '', 소통채널: '', 웹접수: '', 웹회신: '', 계정수: '', 연락처: '', 상태: '활성', 비고: '',
       법인: '', 대표자: '', 계산서형태: '', 수신방법: '', 계산서비고: '', 위탁판매: '', 개인정보: '', 보증보험: '', 사업자등록증: '', 계약제외: '', 계약비고: '', 출처: '' };
   }
   var SECTION_TITLES = { base: '기본 정보 수정', invoice: '계산서 수정', contract: '계약서·보증보험 수정' };
@@ -437,7 +437,6 @@
     $('#f_channel').value = c.소통채널 || '';
     $('#f_wreq').value = c.웹접수 || '';
     $('#f_wrep').value = c.웹회신 || '';
-    $('#f_uid').value = c.대표아이디 || '';
     $('#f_tel').value = c.연락처 || '';
     $('#f_rep').value = c.대표자 || '';
     $('#f_status').value = c.상태 || '활성';
@@ -501,7 +500,6 @@
     c.소통채널 = $('#f_channel').value;
     c.웹접수 = $('#f_wreq').value;
     c.웹회신 = $('#f_wrep').value;
-    c.대표아이디 = $('#f_uid').value.trim();
     c.연락처 = $('#f_tel').value.trim();
     c.상태 = $('#f_status').value;
     c.비고 = $('#f_note').value.trim();

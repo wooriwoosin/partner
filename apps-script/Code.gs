@@ -22,16 +22,27 @@ var SECRET = 'wnet-2026-8f3a9c1e-partner-secret';
 // 초기 관리자 (비밀번호는 해시로만 보관 · 사용자 0명일 때 자동 생성)
 var BOOTSTRAP_ADMIN = { 아이디: 'kmj', 해시: 'uEHJRXREBKPZumiEQLC2XVoaAJBR0F_beTg8hG5ElhE=', 이름: '김민정', 권한: 'admin' };
 
+// 시트 컬럼 정의 — 화면에서 실제로 쓰는 항목만, 업무 순서대로 정리
+// ※ 데이터는 "컬럼 이름"으로 읽고 씁니다. 시트에서 열 순서를 바꿔도 안전합니다.
 var HEADERS = [
-  'id', '소속원문', '업체명', '기호', '업체구분', '인센티브', '전달마커',
-  '소통채널', '웹활용', '직접접수', '접수대행', '유선접수전달', '유선개통전달',
-  '무선개통전달', '회신전달', '계정수', '대표아이디', '연락처', '상태', '비고', '수정일시',
-  // ▼ 통합 확장 필드 (열 위치 고정 — 이름만 바꾸거나 뒤에만 추가해야 기존 데이터와 정렬 유지)
-  '법인', '대표자', '계산서형태', '수신방법', '계산서비고',
-  '위탁판매', '개인정보', '사업자등록증', '계약제외', '계약비고', '출처',
-  // ▼ 추가 확장 (2026-08: 보증보험 · 웹접수/웹회신 단순화)
-  '보증보험', '웹접수', '웹회신'
+  // [식별]
+  'id', '업체명', '소속원문', '기호', '업체구분', '인센티브', '전달마커', '상태',
+  // [기본 정보] — 앱: 기본 정보 탭
+  '소통채널', '웹접수', '웹회신', '대표자', '연락처', '계정수', '비고',
+  // [계산서] — 앱: 🧾 계산서 탭
+  '법인', '계산서형태', '수신방법', '사업자등록증', '계산서비고',
+  // [계약] — 앱: 📝 계약서·보증보험 탭
+  '위탁판매', '개인정보', '보증보험', '계약제외', '계약비고',
+  // [관리]
+  '출처', '수정일시'
 ];
+
+// 더 이상 쓰지 않는 옛 컬럼 (시트정리() 실행 시 제거)
+var LEGACY_COLS = [
+  '웹활용', '직접접수', '접수대행', '유선접수전달', '유선개통전달',
+  '무선개통전달', '회신전달', '대표아이디'
+];
+
 var USER_HEADERS = ['아이디', '비번해시', '이름', '권한', '상태', '등록일'];
 var LOG_HEADERS = ['일시', '아이디', '이름', '작업', '대상', '상세'];
 
@@ -53,11 +64,20 @@ function sheet_(name, headers) {
 function logSheet_() { return sheet_(LOG_SHEET, LOG_HEADERS); }
 function dataSheet_() {
   var sh = sheet_(SHEET_NAME, HEADERS);
-  // 구버전 시트(21열)면 확장 컬럼 헤더를 뒤에 추가 (기존 데이터는 그대로)
-  if (sh.getLastColumn() < HEADERS.length) {
-    sh.getRange(1, 1, 1, HEADERS.length).setValues([HEADERS]);
+  // 시트에 없는 컬럼만 "뒤에" 추가 — 기존 열 순서·데이터는 절대 건드리지 않음
+  var hdr = sheetHeader_(sh);
+  var missing = HEADERS.filter(function (h) { return hdr.indexOf(h) < 0; });
+  if (missing.length) {
+    sh.getRange(1, hdr.length + 1, 1, missing.length).setValues([missing]);
   }
   return sh;
+}
+
+// 시트 1행(헤더) 배열
+function sheetHeader_(sh) {
+  var lastCol = sh.getLastColumn();
+  if (lastCol < 1) return [];
+  return sh.getRange(1, 1, 1, lastCol).getValues()[0].map(function (h) { return String(h).trim(); });
 }
 function userSheet_() { return sheet_(USER_SHEET, USER_HEADERS); }
 
@@ -262,13 +282,18 @@ function readAll_() {
   var sh = dataSheet_();
   var last = sh.getLastRow();
   if (last < 2) return [];
-  var values = sh.getRange(2, 1, last - 1, HEADERS.length).getValues();
-  return values.filter(function (r) { return String(r[0]).trim() !== ''; }).map(function (r) {
-    var o = {}; HEADERS.forEach(function (h, i) { o[h] = r[i]; }); return o;
+  var hdr = sheetHeader_(sh);
+  var values = sh.getRange(2, 1, last - 1, hdr.length).getValues();
+  var idIdx = hdr.indexOf('id');
+  return values.filter(function (r) {
+    return String(idIdx >= 0 ? r[idIdx] : r[0]).trim() !== '';
+  }).map(function (r) {
+    var o = {}; hdr.forEach(function (h, i) { if (h) o[h] = r[i]; }); return o;
   });
 }
-function rowFromObj_(o) {
-  return HEADERS.map(function (h) {
+// 시트 헤더 순서에 맞춰 한 행을 만든다 (컬럼 이름 기준이므로 순서가 바뀌어도 안전)
+function rowFromObj_(o, hdr) {
+  return hdr.map(function (h) {
     if (h === '수정일시') return o[h] || new Date();
     return (o[h] === undefined || o[h] === null) ? '' : o[h];
   });
@@ -337,13 +362,14 @@ function upsert_(company, user) {
             if (ov !== nv) diffs.push(f + ': ' + (ov || '(없음)') + ' → ' + (nv || '(없음)'));
           }
           var merged = before; for (var k in company) merged[k] = company[k];
-          sh.getRange(i + 2, 1, 1, HEADERS.length).setValues([rowFromObj_(merged)]);
+          var hdrU = sheetHeader_(sh);
+          sh.getRange(i + 2, 1, 1, hdrU.length).setValues([rowFromObj_(merged, hdrU)]);
           if (diffs.length) log_(user, '수정', merged['업체명'] || ('id ' + merged.id), diffs.join(' | '));
           return { ok: true, mode: 'update', company: merged };
         }
       }
     }
-    company.id = nextId_(rows); sh.appendRow(rowFromObj_(company));
+    company.id = nextId_(rows); sh.appendRow(rowFromObj_(company, sheetHeader_(sh)));
     log_(user, '신규등록', company['업체명'] || ('id ' + company.id), '소속: ' + (company['소속원문'] || '') + ' · 구분: ' + (company['업체구분'] || ''));
     return { ok: true, mode: 'insert', company: company };
   } finally { lock.releaseLock(); }
@@ -370,8 +396,9 @@ function bulkUpsert_(companies, user) {
       rows[i]['수정일시'] = now;
       updated++;
     });
-    var out = rows.map(rowFromObj_);
-    if (out.length) sh.getRange(2, 1, out.length, HEADERS.length).setValues(out);
+    var hdrB = sheetHeader_(sh);
+    var out = rows.map(function (r) { return rowFromObj_(r, hdrB); });
+    if (out.length) sh.getRange(2, 1, out.length, hdrB.length).setValues(out);
     if (updated) log_(user, '개통리스트 현행화', updated + '개 업체', names.slice(0, 40).join(', ') + (names.length > 40 ? ' 외 ' + (names.length - 40) + '개' : ''));
     return { ok: true, updated: updated };
   } finally { lock.releaseLock(); }
@@ -398,10 +425,11 @@ function bulkImport_(companies, replace, user) {
   var lock = LockService.getScriptLock(); lock.waitLock(30000);
   try {
     var sh = dataSheet_();
-    if (replace) { var last = sh.getLastRow(); if (last > 1) sh.getRange(2, 1, last - 1, HEADERS.length).clearContent(); }
+    var hdrI = sheetHeader_(sh);
+    if (replace) { var last = sh.getLastRow(); if (last > 1) sh.getRange(2, 1, last - 1, hdrI.length).clearContent(); }
     var start = replace ? 1 : nextId_(readAll_()); var now = new Date();
-    var out = companies.map(function (c, idx) { if (!c.id) c.id = start + idx; c['수정일시'] = now; return rowFromObj_(c); });
-    sh.getRange(sh.getLastRow() + 1, 1, out.length, HEADERS.length).setValues(out);
+    var out = companies.map(function (c, idx) { if (!c.id) c.id = start + idx; c['수정일시'] = now; return rowFromObj_(c, hdrI); });
+    sh.getRange(sh.getLastRow() + 1, 1, out.length, hdrI.length).setValues(out);
     var nms = companies.map(function (c) { return c['업체명'] || ''; }).filter(String);
     log_(user, '개통리스트 신규등록', out.length + '개 업체', nms.slice(0, 40).join(', ') + (nms.length > 40 ? ' 외 ' + (nms.length - 40) + '개' : ''));
     return { ok: true, imported: out.length };
@@ -417,6 +445,76 @@ function 계정추가_직접(id, pw, name, role) {
 }
 
 function setup() { dataSheet_(); userSheet_(); return 'ok'; }
+
+/* ============================================================
+ * 시트정리() — 편집기에서 1회 실행
+ * ------------------------------------------------------------
+ * '업체관리' 탭을 앱이 실제로 쓰는 컬럼만 남겨 업무 순서대로 재정렬합니다.
+ *  1. 실행 전 원본을 '업체관리_백업_날짜시각' 탭으로 복사 (되돌리기용)
+ *  2. 옛 컬럼(웹활용·접수대행·유선/무선개통전달·회신전달·대표아이디 등) 제거
+ *     — 단, 웹접수/웹회신이 비어 있으면 옛 값에서 만들어 채운 뒤 제거하므로 정보 손실 없음
+ *  3. 남은 컬럼을 HEADERS 순서로 재배치
+ * 실행 후 시트에서 직접 일괄 수정하셔도 앱이 컬럼 "이름"으로 읽기 때문에 안전합니다.
+ * ============================================================ */
+function 시트정리() {
+  var lock = LockService.getScriptLock(); lock.waitLock(60000);
+  try {
+    var ss = ss_();
+    var sh = ss.getSheetByName(SHEET_NAME);
+    if (!sh) throw new Error(SHEET_NAME + ' 탭이 없습니다.');
+
+    var hdr = sheetHeader_(sh);
+    var last = sh.getLastRow();
+    var values = last > 1 ? sh.getRange(2, 1, last - 1, hdr.length).getValues() : [];
+
+    // 1) 백업
+    var stamp = Utilities.formatDate(new Date(), LOG_TZ, 'yyyyMMdd_HHmm');
+    var backupName = SHEET_NAME + '_백업_' + stamp;
+    sh.copyTo(ss).setName(backupName);
+
+    // 2) 행 → 객체 (이름 기준)
+    var idIdx = hdr.indexOf('id');
+    var rows = [];
+    values.forEach(function (r) {
+      if (String(idIdx >= 0 ? r[idIdx] : r[0]).trim() === '') return;
+      var o = {};
+      hdr.forEach(function (h, i) { if (h) o[h] = r[i]; });
+      rows.push(o);
+    });
+
+    // 3) 옛 값 → 새 항목으로 이전 (웹접수/웹회신)
+    var filled = 0;
+    rows.forEach(function (o) {
+      if (String(o['웹접수'] || '') !== '' && String(o['웹회신'] || '') !== '') return;
+      var mk = String(o['전달마커'] || '').trim();
+      var web = String(o['웹활용'] || '').trim();
+      var v;
+      if (mk === 'X') v = 'Y';              // 마커 X = 업체가 직접 웹 처리
+      else if (mk === 'O') v = 'N';         // 마커 O = 대신 전달
+      else v = (web === 'Y') ? 'Y' : 'N';   // 마커 없으면 옛 웹활용 값 기준
+      if (String(o['웹접수'] || '') === '') o['웹접수'] = v;
+      if (String(o['웹회신'] || '') === '') o['웹회신'] = v;
+      filled++;
+    });
+
+    // 4) 새 헤더로 다시 쓰기 (열 전체 초기화 후 재작성)
+    sh.clear();
+    sh.getRange(1, 1, 1, HEADERS.length).setValues([HEADERS]);
+    if (rows.length) {
+      var out = rows.map(function (o) { return rowFromObj_(o, HEADERS); });
+      sh.getRange(2, 1, out.length, HEADERS.length).setValues(out);
+    }
+    sh.setFrozenRows(1);
+
+    var removed = hdr.filter(function (h) { return h && HEADERS.indexOf(h) < 0; });
+    var msg = '시트 정리 완료 · 업체 ' + rows.length + '개 · 컬럼 ' + HEADERS.length + '개\n'
+      + '제거된 옛 컬럼(' + removed.length + '): ' + (removed.join(', ') || '없음') + '\n'
+      + '웹접수/웹회신 자동 채움: ' + filled + '건\n'
+      + '백업 탭: ' + backupName;
+    Logger.log(msg);
+    return msg;
+  } finally { lock.releaseLock(); }
+}
 
 /* ============================================================
  * ②③ 통합 병합 — Apps Script 편집기에서 [병합실행] 1회 실행
@@ -575,10 +673,11 @@ function 병합실행() {
     rows.forEach(function (r) { if (!r.id) r.id = ++maxId; });
 
     var sh = dataSheet_();
+    var hdrM = sheetHeader_(sh);
     var last = sh.getLastRow();
-    if (last > 1) sh.getRange(2, 1, last - 1, HEADERS.length).clearContent();
-    var out = rows.map(rowFromObj_);
-    sh.getRange(2, 1, out.length, HEADERS.length).setValues(out);
+    if (last > 1) sh.getRange(2, 1, last - 1, hdrM.length).clearContent();
+    var out = rows.map(function (r) { return rowFromObj_(r, hdrM); });
+    sh.getRange(2, 1, out.length, hdrM.length).setValues(out);
 
     writeMergeReport_(rows, issues);
 

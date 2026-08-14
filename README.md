@@ -118,8 +118,10 @@ assets/
   app.js              분류 엔진 + 목록/필터/CRUD 로직
   styles.css          스타일
 apps-script/
-  Code.gs             구글시트 JSON API + 병합실행() (HTML 없음, API 전용)
+  Code.gs             구글시트 JSON API + 병합실행()/시트정리() (HTML 없음, API 전용)
   appsscript.json     매니페스트(웹앱 접근 설정)
+docs/
+  시트-컬럼-안내.md    시트 컬럼이 앱 어디에 나오는지 정리 (일괄 수정 시 참고)
 data/
   seed.json           자동분류된 482개 업체 초기데이터
   seed.csv            동일 데이터 CSV(시트 직접 붙여넣기용)
