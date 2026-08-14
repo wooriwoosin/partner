@@ -57,17 +57,21 @@
     return map[m[1]] || '';
   }
   // 구분 + 마커 -> 웹접수/웹회신 기본값
-  //  · 마커 X = 업체가 직접 웹 처리 → 웹접수 Y · 웹회신 Y
-  //  · 마커 O = 대신 전달 → 웹접수 N · 웹회신 N
-  //  · 마커 없음(판매점 기본 등) = 웹활용 여부 따라, 기본 N
+  //  · 판매점 : 웹을 쓰지 않으므로 마커와 무관하게 둘 다 N (예외는 수기로 Y 처리)
+  //  · 협력점 : 마커 X = 업체가 직접 웹 처리 → 둘 다 Y / 마커 O = 대신 전달 → 둘 다 N
   function derive(gubun, marker, webY) {
     var d = { 소통채널: '', 웹접수: 'N', 웹회신: 'N', 상태: '활성' };
-    if (gubun === '판매점') d.소통채널 = '카카오톡채널';
-    else if (gubun === '협력점') d.소통채널 = '카카오톡단체방';
+    if (gubun === '판매점') { d.소통채널 = '카카오톡채널'; return d; }
+    if (gubun === '협력점') d.소통채널 = '카카오톡단체방';
     if (marker === 'X') { d.웹접수 = 'Y'; d.웹회신 = 'Y'; }
     else if (marker === 'O') { d.웹접수 = 'N'; d.웹회신 = 'N'; }
     else if (webY === 'Y') { d.웹접수 = 'Y'; d.웹회신 = 'Y'; }
     return d;
+  }
+  // 신규 판매점은 마커 표기가 없으면 X 로 기록 (원장 표기 관행)
+  function defaultMarker(gubun, mk) {
+    if (mk) return mk;
+    return gubun === '판매점' ? 'X' : '';
   }
 
   /* ============ 상태 ============ */
@@ -772,7 +776,8 @@
         // 기호/소속이 달라졌거나, 휴면 업체에 개통건 발생(→활성 전환) → 현행화 후보
         var soanChanged = String(ex.소속원문 || '').trim() !== raw;
         var wake = ex.상태 === '휴면';
-        if (soanChanged || wake) {
+        var mkChanged = !!mk && String(ex.전달마커 || '').trim() !== mk;
+        if (soanChanged || wake || mkChanged) {
           var g2 = classify(raw);
           changes.push({
             id: ex.id, 업체명: ex.업체명,
@@ -780,7 +785,8 @@
             old기호: ex.기호 || '', new기호: leadSymbol(raw),
             old구분: ex.업체구분 || '', new구분: g2 === '미분류' ? (ex.업체구분 || '') : g2,
             oldInc: ex.인센티브 || 'N', newInc: isIncentive(raw) ? 'Y' : 'N',
-            마커: mk, soanChanged: soanChanged, wake: wake,
+            마커: mk, oldMk: String(ex.전달마커 || ''), mkChanged: mkChanged,
+            soanChanged: soanChanged, wake: wake,
             checked: true
           });
         } else same++;
@@ -830,11 +836,12 @@
     $('#upChgTbody').innerHTML = chgs.map(function (c, i) {
       var diffs = [];
       if (c.wake) diffs.push('💤 휴면→활성 (개통 발생)');
+      if (c.mkChanged) diffs.push('마커 ' + (c.oldMk || '없음') + '→' + c.마커 + ' (웹접수·웹회신 자동 재설정)');
       if (c.soanChanged) {
         if (c.old기호 !== c.new기호) diffs.push('기호 ' + (c.old기호 || '없음') + '→' + (c.new기호 || '없음'));
         if (c.old구분 !== c.new구분) diffs.push('구분 ' + (c.old구분 || '?') + '→' + (c.new구분 || '?'));
         if (c.oldInc !== c.newInc) diffs.push('인센티브 ' + c.oldInc + '→' + c.newInc);
-        if (diffs.length === (c.wake ? 1 : 0)) diffs.push('표기 변경');
+        if (!diffs.length) diffs.push('표기 변경');
       }
       return '<tr><td><input type="checkbox" class="up-chg-chk" data-i="' + i + '"' + (c.checked ? ' checked' : '') + '></td>' +
         '<td>' + esc(c.업체명) + '</td><td>' + esc(c.old소속) + '</td><td><b>' + esc(c.raw) + '</b></td>' +
@@ -872,7 +879,7 @@
       var soan = p.소속원문;
       var g = p.구분 || classify(soan);
       if (g === '미분류') g = '';
-      var mk = p.마커 || markerFromName(soan);
+      var mk = defaultMarker(g, p.마커 || markerFromName(soan));
       var d = derive(g, mk);
       return {
         소속원문: soan, 업체명: p.업체명, 기호: leadSymbol(soan), 업체구분: g,
@@ -887,7 +894,16 @@
       var u = { id: c.id };
       if (c.soanChanged) {
         u.소속원문 = c.raw; u.기호 = c.new기호; u.업체구분 = c.new구분;
-        u.인센티브 = c.newInc; u.전달마커 = c.마커 || markerFromName(c.raw);
+        u.인센티브 = c.newInc;
+      }
+      if (c.mkChanged || c.soanChanged) {
+        var gb = c.new구분 || c.old구분;
+        var nmk = defaultMarker(gb, c.마커 || markerFromName(c.raw));
+        u.전달마커 = nmk;
+        if (c.mkChanged) {   // 마커가 바뀌면 웹접수·웹회신도 규칙대로 다시 세팅
+          var d2 = derive(gb, nmk);
+          u.웹접수 = d2.웹접수; u.웹회신 = d2.웹회신;
+        }
       }
       if (c.wake) u.상태 = '활성';
       return u;
@@ -903,6 +919,15 @@
       if (updates.length) msgs.push('변경 ' + updates.length + '개 적용');
       toast(msgs.join(' · ') + ' 완료', 'ok');
       $('#uploadOverlay').classList.remove('open');
+      if (companies.length) {
+        setTimeout(function () {
+          alert('신규 ' + companies.length + '개 업체가 등록되었습니다.\n\n' +
+            '기본 정보(기호·구분·마커·웹접수/웹회신)는 자동으로 채워졌습니다.\n' +
+            '계산서·계약 정보는 개통리스트에 없는 값이라 비어 있어요.\n\n' +
+            '▸ 🧾 계산서 탭 → 필터 "계산서정보 없음" 으로 미입력 업체만 모아 채우기\n' +
+            '▸ 📝 계약서·보증보험 탭 → 필터 "계약정보 없음" 으로 모아 채우기');
+        }, 400);
+      }
       return load();
     }).catch(function (e) {
       if (/unknown action/i.test(e.message)) toast('Apps Script 배포가 구버전입니다. 새 Code.gs로 다시 배포해 주세요.', 'err');
