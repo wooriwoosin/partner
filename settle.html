@@ -1143,14 +1143,22 @@ function dlOne(i){const r=results[i];if(!r?.ok)return;const url=URL.createObject
      내장/CSV DB 위에 덮어씀 (내장 DB는 fallback으로 유지)
    ═══════════════════════════════════════════ */
 (function () {
-  // 헤더에 메인앱 바로가기
-  var hdr = document.querySelector('.hdr');
-  if (hdr) {
-    var a = document.createElement('a');
-    a.href = 'index.html';
-    a.textContent = '← 업체 관리앱';
-    a.style.cssText = 'margin-left:auto;font-size:13px;color:#2563eb;text-decoration:none;font-weight:600;white-space:nowrap';
-    hdr.appendChild(a);
+  // CSV 업로드는 사용 안 함 (메인 DB 연동으로 대체)
+  var csvBtn = document.querySelector('.csv-btn');
+  if (csvBtn) csvBtn.style.display = 'none';
+  var csvReset = document.getElementById('csvReset');
+  if (csvReset) csvReset.style.display = 'none';
+
+  // 단독으로 열었을 때만 메인앱 바로가기 표시 (메인앱 탭 안에서는 불필요)
+  if (window.self === window.top) {
+    var hdr = document.querySelector('.hdr');
+    if (hdr) {
+      var a = document.createElement('a');
+      a.href = 'index.html';
+      a.textContent = '← 업체 관리앱';
+      a.style.cssText = 'margin-left:auto;font-size:13px;color:#2563eb;text-decoration:none;font-weight:600;white-space:nowrap';
+      hdr.appendChild(a);
+    }
   }
 
   var CFG = window.APP_CONFIG || {};
@@ -1159,7 +1167,7 @@ function dlOne(i){const r=results[i];if(!r?.ok)return;const url=URL.createObject
   try { token = localStorage.getItem('partner_token') || ''; } catch (e) {}
   var badge = document.getElementById('csvBadge'), msg = document.getElementById('csvMsg');
   if (!token) {
-    if (msg) msg.innerHTML = '💡 <a href="index.html">업체 관리앱</a>에 로그인해 두면 메인 DB의 계산서방식을 자동으로 불러옵니다 (지금은 내장/CSV DB 사용 중)';
+    if (msg) msg.innerHTML = '💡 업체 관리앱에 로그인하면 메인 DB의 계산서방식을 자동으로 불러옵니다 (지금은 내장 DB 사용 중)';
     return;
   }
   fetch(CFG.API_URL + '?action=list&token=' + encodeURIComponent(token))

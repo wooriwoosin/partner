@@ -29,14 +29,10 @@
       <span id="modeBadge" class="badge-mode">●</span>
       <div class="spacer"></div>
       <span id="userName" class="badge-mode"></span>
-      <a href="settle.html" class="btn ghost sm" style="text-decoration:none">💰 정산변환</a>
       <button id="usersBtn" class="btn ghost sm">계정관리</button>
       <button id="logoutBtn" class="btn ghost sm">로그아웃</button>
       <button id="reloadBtn" class="btn ghost sm">새로고침</button>
-      <button id="importBtn" class="btn ghost sm" style="display:none">시트에 초기데이터 넣기</button>
-      <button id="mergeBtn" class="btn ghost sm" style="display:none">②③ 데이터 병합</button>
-      <button id="uploadBtn" class="btn ghost sm" style="display:none">📤 개통리스트 업로드</button>
-      <button id="addBtn" class="btn primary">+ 신규 업체</button>
+      <button id="uploadBtn" class="btn primary" style="display:none">📤 개통리스트 업로드</button>
     </header>
 
     <div id="stats" class="stats"></div>
@@ -45,6 +41,7 @@
       <button class="btn sm tab-btn active" data-view="base">기본 정보</button>
       <button class="btn sm tab-btn" data-view="invoice">🧾 계산서</button>
       <button class="btn sm tab-btn" data-view="contract">📝 전자계약</button>
+      <button class="btn sm tab-btn" data-view="settle">💰 정산변환</button>
     </div>
 
     <div class="toolbar">
@@ -59,11 +56,6 @@
         <option value="">웹활용(전체)</option>
         <option value="Y">웹활용 Y</option>
         <option value="N">웹활용 N</option>
-      </select>
-      <select id="fltStatus" title="상태">
-        <option value="">상태(전체)</option>
-        <option value="활성">활성</option>
-        <option value="보류">보류(정리대상)</option>
       </select>
       <select id="fltInv" title="계산서형태" style="display:none">
         <option value="">계산서(전체)</option>
@@ -89,11 +81,16 @@
       <span id="count" class="count"></span>
     </div>
 
-    <div class="table-wrap">
+    <div class="table-wrap" id="mainTableWrap">
       <table>
         <thead id="thead"></thead>
         <tbody id="tbody"></tbody>
       </table>
+    </div>
+
+    <!-- 💰 정산변환 (settle.html 내장) -->
+    <div id="settleWrap" style="display:none">
+      <iframe id="settleFrame" title="정산내역서 가공" style="width:100%;height:calc(100vh - 170px);border:0;border-radius:12px;background:#f0f2f5"></iframe>
     </div>
   </div>
 
@@ -292,11 +289,23 @@
           <select id="upCol"></select>
         </div>
         <div id="upSummary" class="preview-box" style="display:none; margin-top:10px"></div>
-        <div class="table-wrap" id="upTableWrap" style="display:none; margin-top:10px; max-height:320px; overflow-y:auto">
-          <table style="min-width:0">
-            <thead><tr><th style="width:36px"><input type="checkbox" id="upAll" checked /></th><th>소속(원문)</th><th>업체명</th><th>구분(자동)</th></tr></thead>
-            <tbody id="upTbody"></tbody>
-          </table>
+        <div id="upNewWrap" style="display:none; margin-top:10px">
+          <div style="font-size:12px;color:var(--muted);font-weight:700;margin-bottom:6px">🆕 신규 업체 (메인 DB에 없음)</div>
+          <div class="table-wrap" style="max-height:240px; overflow-y:auto">
+            <table style="min-width:0">
+              <thead><tr><th style="width:36px"><input type="checkbox" id="upAll" checked /></th><th>소속(원문)</th><th>업체명</th><th>구분(자동)</th></tr></thead>
+              <tbody id="upTbody"></tbody>
+            </table>
+          </div>
+        </div>
+        <div id="upChgWrap" style="display:none; margin-top:12px">
+          <div style="font-size:12px;color:var(--muted);font-weight:700;margin-bottom:6px">🔄 기호/소속 변경 감지 (현행화)</div>
+          <div class="table-wrap" style="max-height:240px; overflow-y:auto">
+            <table style="min-width:0">
+              <thead><tr><th style="width:36px"><input type="checkbox" id="upChgAll" checked /></th><th>업체명</th><th>기존 소속</th><th>→ 새 소속</th><th>변경 내용</th></tr></thead>
+              <tbody id="upChgTbody"></tbody>
+            </table>
+          </div>
         </div>
       </div>
       <footer>

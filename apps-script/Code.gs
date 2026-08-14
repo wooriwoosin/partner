@@ -207,6 +207,7 @@ function doPost(e) {
     if (action === 'delete') { requireAuth_(body.token); return json_(remove_(body.id)); }
     if (action === 'bulkImport') { requireAuth_(body.token); return json_(bulkImport_(body.companies, body.replace)); }
     if (action === 'merge') { requireAuth_(body.token); return json_({ ok: true, summary: 병합실행() }); }
+    if (action === 'bulkUpsert') { requireAuth_(body.token); return json_(bulkUpsert_(body.companies)); }
     if (action === 'listUsers') { requireAuth_(body.token); return json_({ ok: true, users: usersPublic_() }); }
     if (action === 'createUser') { requireAuth_(body.token); return json_(createUser_(body.id, body.pw, body.name, body.role)); }
     if (action === 'deleteUser') { requireAuth_(body.token); return json_(deleteUser_(body.id)); }
@@ -233,6 +234,30 @@ function upsert_(company) {
     return { ok: true, mode: 'insert', company: company };
   } finally { lock.releaseLock(); }
 }
+// 여러 업체를 id 기준으로 한 번에 부분 갱신 (개통리스트 현행화용)
+function bulkUpsert_(companies) {
+  if (!companies || !companies.length) return { ok: false, error: 'no companies' };
+  var lock = LockService.getScriptLock(); lock.waitLock(30000);
+  try {
+    var sh = dataSheet_();
+    var rows = readAll_();
+    var byId = {};
+    rows.forEach(function (r, i) { byId[String(r.id)] = i; });
+    var now = new Date(); var updated = 0;
+    companies.forEach(function (c) {
+      if (!c || c.id === undefined || c.id === '') return;
+      var i = byId[String(c.id)];
+      if (i === undefined) return;
+      for (var k in c) { if (k !== 'id') rows[i][k] = c[k]; }
+      rows[i]['수정일시'] = now;
+      updated++;
+    });
+    var out = rows.map(rowFromObj_);
+    if (out.length) sh.getRange(2, 1, out.length, HEADERS.length).setValues(out);
+    return { ok: true, updated: updated };
+  } finally { lock.releaseLock(); }
+}
+
 function remove_(id) {
   if (!id) return { ok: false, error: 'no id' };
   var lock = LockService.getScriptLock(); lock.waitLock(20000);

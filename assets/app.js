@@ -66,7 +66,7 @@
   }
 
   /* ============ 상태 ============ */
-  var STATE = { all: [], view: [], filter: { gubun: '', marker: '', web: '', status: '', inv: '', sym: '', con: '', q: '' } };
+  var STATE = { all: [], view: [], filter: { gubun: '', marker: '', web: '', inv: '', sym: '', con: '', q: '' } };
   var VIEW = 'base'; // base | invoice | contract
   var DELIV_FIELDS = ['접수대행', '유선접수전달', '유선개통전달', '무선개통전달', '회신전달'];
   var EDITING = null; // 수정 중인 원본 레코드 (출처 등 폼에 없는 필드 보존용)
@@ -218,8 +218,7 @@
       statCard('', 'total', s.total, '전체 업체'),
       statCard('sales', '판매점', s.판매점, '판매점'),
       statCard('partner', '협력점', s.협력점, '협력점'),
-      statCard('own', '자점', s.자점, '자점'),
-      statCard('hold', '__hold', s.hold, '보류(정리대상)')
+      statCard('own', '자점', s.자점, '자점')
     ];
     if (VIEW === 'invoice') {
       cards = [
@@ -246,8 +245,7 @@
     $$('#stats .stat').forEach(function (el) {
       el.onclick = function () {
         var key = el.getAttribute('data-key');
-        if (key === '__hold') { STATE.filter.status = STATE.filter.status === '보류' ? '' : '보류'; STATE.filter.gubun = ''; }
-        else if (key === 'total') { STATE.filter.gubun = ''; STATE.filter.status = ''; STATE.filter.inv = ''; }
+        if (key === 'total') { STATE.filter.gubun = ''; STATE.filter.inv = ''; STATE.filter.con = ''; }
         else if (key.indexOf('inv:') === 0) {
           var v = key.slice(4);
           STATE.filter.inv = STATE.filter.inv === v ? '' : v;
@@ -256,16 +254,16 @@
           var cv = key.slice(4);
           STATE.filter.con = STATE.filter.con === cv ? '' : cv;
         }
-        else { STATE.filter.gubun = STATE.filter.gubun === key ? '' : key; STATE.filter.status = ''; }
+        else { STATE.filter.gubun = STATE.filter.gubun === key ? '' : key; }
         syncControls(); applyFilter();
       };
     });
   }
   function statCard(cls, key, n, label) {
-    var active = (key === STATE.filter.gubun) || (key === '__hold' && STATE.filter.status === '보류')
+    var active = (key === STATE.filter.gubun)
       || (key.indexOf('inv:') === 0 && STATE.filter.inv === key.slice(4))
       || (key.indexOf('con:') === 0 && STATE.filter.con === key.slice(4))
-      || (key === 'total' && !STATE.filter.gubun && !STATE.filter.status && !STATE.filter.inv && !STATE.filter.con);
+      || (key === 'total' && !STATE.filter.gubun && !STATE.filter.inv && !STATE.filter.con);
     return '<div class="stat ' + cls + (active ? ' active' : '') + '" data-key="' + key + '">' +
       '<div class="n">' + n + '</div><div class="l">' + label + '</div></div>';
   }
@@ -273,10 +271,10 @@
   function applyFilter() {
     var f = STATE.filter, q = f.q.trim().toLowerCase();
     STATE.view = STATE.all.filter(function (c) {
+      if (VIEW === 'invoice' && c.업체구분 === '자점') return false; // 자점은 계산서 발행 안 함
       if (f.gubun && c.업체구분 !== f.gubun) return false;
       if (f.marker && (c.전달마커 || '') !== f.marker) return false;
       if (f.web && (c.웹활용 || '') !== f.web) return false;
-      if (f.status && c.상태 !== f.status) return false;
       if (f.inv) {
         var iv = c.계산서형태 || '';
         if (f.inv === '__none' ? iv !== '' : iv !== f.inv) return false;
@@ -491,35 +489,8 @@
     }).catch(function (e) { toast('삭제 실패: ' + e.message, 'err'); }).then(function () { setBusy(false); });
   }
 
-  /* ============ 초기데이터 밀어넣기 ============ */
-  function importSeed() {
-    if (!LIVE) { toast('먼저 config.js 에 API_URL 을 설정하세요', 'err'); return; }
-    if (!confirm('현재 시트 데이터를 비우고, 자동분류된 482개 업체를 새로 넣습니다. 진행할까요?')) return;
-    setBusy(true);
-    fetch('data/seed.json').then(function (r) { return r.json(); }).then(function (d) {
-      return apiPost({ action: 'bulkImport', companies: d.companies, replace: true });
-    }).then(function (res) {
-      toast(res.imported + '개 업체를 시트에 넣었습니다', 'ok');
-      return load();
-    }).catch(function (e) { toast('초기화 실패: ' + e.message, 'err'); }).then(function () { setBusy(false); });
-  }
-
-  /* ============ ②③ 데이터 병합 ============ */
-  function runMerge() {
-    if (!LIVE) { toast('먼저 config.js 에 API_URL 을 설정하세요', 'err'); return; }
-    if (!confirm('②계산서방식 · ③전자계약서 시트를 읽어 메인 DB에 병합합니다.\n(원본 시트는 수정하지 않습니다) 진행할까요?')) return;
-    toast('병합 중… 최대 1분 정도 걸릴 수 있어요', 'ok');
-    apiPost({ action: 'merge' }).then(function (d) {
-      alert(d.summary || '병합 완료');
-      return load();
-    }).catch(function (e) {
-      if (/unknown action/i.test(e.message)) toast('Apps Script 배포가 구버전입니다. 새 버전으로 다시 배포해 주세요.', 'err');
-      else toast('병합 실패: ' + e.message, 'err');
-    });
-  }
-
-  /* ============ 개통리스트 업로드 → 신규업체 자동등록 ============ */
-  var UP = { grid: [], headerRow: -1, colIdx: -1, candidates: [] };
+  /* ============ 개통리스트 업로드 → 신규 등록 + 기호/소속 현행화 ============ */
+  var UP = { grid: [], headerRow: -1, colIdx: -1, candidates: [], changes: [] };
 
   // 중복 비교용 키: 숫자접두/기호/마커괄호/공백 제거 + 소문자
   function normKey(s) {
@@ -532,11 +503,12 @@
   }
 
   function openUpload() {
-    UP = { grid: [], headerRow: -1, colIdx: -1, candidates: [] };
+    UP = { grid: [], headerRow: -1, colIdx: -1, candidates: [], changes: [] };
     $('#upFile').value = '';
     $('#upColWrap').style.display = 'none';
     $('#upSummary').style.display = 'none';
-    $('#upTableWrap').style.display = 'none';
+    $('#upNewWrap').style.display = 'none';
+    $('#upChgWrap').style.display = 'none';
     $('#upSave').disabled = true;
     $('#uploadOverlay').classList.add('open');
   }
@@ -578,38 +550,55 @@
 
   function buildCandidates() {
     if (UP.colIdx < 0) return;
-    var existing = {};
+    var byKey = {};
     STATE.all.forEach(function (x) {
-      existing[normKey(x.업체명)] = 1;
-      existing[normKey(x.소속원문)] = 1;
+      var k1 = normKey(x.업체명), k2 = normKey(x.소속원문);
+      if (k1 && !byKey[k1]) byKey[k1] = x;
+      if (k2 && !byKey[k2]) byKey[k2] = x;
     });
-    var seen = {}, cands = [], dup = 0, total = 0;
+    var seen = {}, cands = [], changes = [], same = 0, total = 0;
     for (var r = UP.headerRow + 1; r < UP.grid.length; r++) {
       var raw = String((UP.grid[r] || [])[UP.colIdx] || '').trim();
       if (!raw) continue;
       total++;
       var key = normKey(raw);
-      if (!key) continue;
-      if (existing[key]) { dup++; continue; }
-      if (seen[key]) continue;
+      if (!key || seen[key]) continue;
       seen[key] = 1;
+      var ex = byKey[key];
+      if (ex) {
+        // 이름은 같은데 기호/소속 원문이 달라짐 → 현행화 후보
+        if (String(ex.소속원문 || '').trim() !== raw) {
+          var g2 = classify(raw);
+          changes.push({
+            id: ex.id, 업체명: ex.업체명,
+            old소속: ex.소속원문 || '', raw: raw,
+            old기호: ex.기호 || '', new기호: leadSymbol(raw),
+            old구분: ex.업체구분 || '', new구분: g2 === '미분류' ? (ex.업체구분 || '') : g2,
+            oldInc: ex.인센티브 || 'N', newInc: isIncentive(raw) ? 'Y' : 'N',
+            checked: true
+          });
+        } else same++;
+        continue;
+      }
       var g = classify(raw);
       cands.push({ 소속원문: raw, 업체명: companyName(raw), 구분: g === '미분류' ? '' : g, checked: true });
     }
     UP.candidates = cands;
+    UP.changes = changes;
     $('#upSummary').style.display = '';
-    $('#upSummary').innerHTML = '개통리스트 <b>' + total + '건</b> 중 기존 업체 중복 <b>' + dup + '건</b> 제외 → 신규 후보 <b>' + cands.length + '개</b>';
+    $('#upSummary').innerHTML = '리스트 <b>' + total + '건</b> → 🆕 신규 <b>' + cands.length + '개</b> · 🔄 기호/소속 변경 <b>' + changes.length + '개</b> · 기존과 동일 <b>' + same + '건</b>';
     renderUploadTable();
+    renderChangeTable();
   }
 
   function renderUploadTable() {
     var cands = UP.candidates;
     if (!cands.length) {
-      $('#upTableWrap').style.display = 'none';
-      $('#upSave').disabled = true;
+      $('#upNewWrap').style.display = 'none';
+      updateUpSave();
       return;
     }
-    $('#upTableWrap').style.display = '';
+    $('#upNewWrap').style.display = '';
     $('#upTbody').innerHTML = cands.map(function (c, i) {
       return '<tr><td><input type="checkbox" class="up-chk" data-i="' + i + '"' + (c.checked ? ' checked' : '') + '></td>' +
         '<td>' + esc(c.소속원문) + '</td><td>' + esc(c.업체명) + '</td>' +
@@ -626,16 +615,49 @@
     };
     updateUpSave();
   }
+
+  function renderChangeTable() {
+    var chgs = UP.changes;
+    if (!chgs.length) { $('#upChgWrap').style.display = 'none'; updateUpSave(); return; }
+    $('#upChgWrap').style.display = '';
+    $('#upChgTbody').innerHTML = chgs.map(function (c, i) {
+      var diffs = [];
+      if (c.old기호 !== c.new기호) diffs.push('기호 ' + (c.old기호 || '없음') + '→' + (c.new기호 || '없음'));
+      if (c.old구분 !== c.new구분) diffs.push('구분 ' + (c.old구분 || '?') + '→' + (c.new구분 || '?'));
+      if (c.oldInc !== c.newInc) diffs.push('인센티브 ' + c.oldInc + '→' + c.newInc);
+      if (!diffs.length) diffs.push('표기 변경');
+      return '<tr><td><input type="checkbox" class="up-chg-chk" data-i="' + i + '"' + (c.checked ? ' checked' : '') + '></td>' +
+        '<td>' + esc(c.업체명) + '</td><td>' + esc(c.old소속) + '</td><td><b>' + esc(c.raw) + '</b></td>' +
+        '<td>' + esc(diffs.join(' · ')) + '</td></tr>';
+    }).join('');
+    $$('#upChgTbody .up-chg-chk').forEach(function (chk) {
+      chk.onchange = function () { UP.changes[Number(chk.getAttribute('data-i'))].checked = chk.checked; updateUpSave(); };
+    });
+    $('#upChgAll').checked = true;
+    $('#upChgAll').onchange = function () {
+      var on = this.checked;
+      UP.changes.forEach(function (c) { c.checked = on; });
+      renderChangeTable(); updateUpSave();
+    };
+    updateUpSave();
+  }
+
   function updateUpSave() {
     var n = UP.candidates.filter(function (c) { return c.checked; }).length;
-    $('#upSave').disabled = n === 0;
-    $('#upSave').textContent = n ? ('선택 ' + n + '개 업체 등록') : '선택 업체 등록';
+    var m = UP.changes.filter(function (c) { return c.checked; }).length;
+    $('#upSave').disabled = (n + m) === 0;
+    var parts = [];
+    if (n) parts.push('신규 ' + n + '개 등록');
+    if (m) parts.push('변경 ' + m + '개 적용');
+    $('#upSave').textContent = parts.length ? parts.join(' · ') : '선택 항목 적용';
   }
 
   function saveUpload() {
     var picked = UP.candidates.filter(function (c) { return c.checked; });
-    if (!picked.length) return;
+    var pickedChg = UP.changes.filter(function (c) { return c.checked; });
+    if (!picked.length && !pickedChg.length) return;
     if (!LIVE) { toast('데모 모드에서는 등록할 수 없습니다', 'err'); return; }
+
     var companies = picked.map(function (p) {
       var soan = p.소속원문;
       var g = p.구분 || classify(soan);
@@ -650,12 +672,30 @@
         회신전달: d.회신전달, 상태: d.상태 || '활성', 출처: '개통리스트'
       };
     });
+    // 현행화: 소속/기호/구분/인센티브/마커만 갱신 (전달 체크리스트·계산서·계약 값은 유지)
+    var updates = pickedChg.map(function (c) {
+      return {
+        id: c.id, 소속원문: c.raw, 기호: c.new기호, 업체구분: c.new구분,
+        인센티브: c.newInc, 전달마커: markerFromName(c.raw)
+      };
+    });
+
     $('#upSave').disabled = true;
-    apiPost({ action: 'bulkImport', companies: companies, replace: false }).then(function (res) {
-      toast(res.imported + '개 업체가 등록되었습니다', 'ok');
+    var jobs = [];
+    if (companies.length) jobs.push(apiPost({ action: 'bulkImport', companies: companies, replace: false }));
+    if (updates.length) jobs.push(apiPost({ action: 'bulkUpsert', companies: updates }));
+    Promise.all(jobs).then(function () {
+      var msgs = [];
+      if (companies.length) msgs.push('신규 ' + companies.length + '개 등록');
+      if (updates.length) msgs.push('변경 ' + updates.length + '개 적용');
+      toast(msgs.join(' · ') + ' 완료', 'ok');
       $('#uploadOverlay').classList.remove('open');
       return load();
-    }).catch(function (e) { toast('등록 실패: ' + e.message, 'err'); $('#upSave').disabled = false; });
+    }).catch(function (e) {
+      if (/unknown action/i.test(e.message)) toast('Apps Script 배포가 구버전입니다. 새 Code.gs로 다시 배포해 주세요.', 'err');
+      else toast('적용 실패: ' + e.message, 'err');
+      $('#upSave').disabled = false;
+    });
   }
 
   /* ============ 유틸 ============ */
@@ -668,7 +708,6 @@
   function syncControls() {
     $('#fltMarker').value = STATE.filter.marker;
     $('#fltWeb').value = STATE.filter.web;
-    $('#fltStatus').value = STATE.filter.status;
     $('#fltInv').value = STATE.filter.inv;
     $('#fltSym').value = STATE.filter.sym;
     $('#fltCon').value = STATE.filter.con;
@@ -676,7 +715,12 @@
 
   function populateSymFilter() {
     var syms = {};
-    STATE.all.forEach(function (c) { if (c.기호) syms[String(c.기호)] = 1; });
+    STATE.all.forEach(function (c) {
+      var s = String(c.기호 || '');
+      if (!s) return;
+      if (/^\d/.test(s) || s === '●') return; // 자점(숫자·●) 기호는 계산서 필터에서 제외
+      syms[s] = 1;
+    });
     var keys = Object.keys(syms).sort();
     $('#fltSym').innerHTML = '<option value="">기호(전체)</option>' +
       keys.map(function (k) { return '<option value="' + esc(k) + '">' + esc(k) + '</option>'; }).join('');
@@ -686,6 +730,19 @@
   function setView(v) {
     VIEW = v;
     $$('.tab-btn').forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-view') === v); });
+
+    // 💰 정산변환 탭: settle.html 내장 화면으로 전환
+    var settle = v === 'settle';
+    $('#stats').style.display = settle ? 'none' : '';
+    document.querySelector('.toolbar').style.display = settle ? 'none' : '';
+    $('#mainTableWrap').style.display = settle ? 'none' : '';
+    $('#settleWrap').style.display = settle ? '' : 'none';
+    if (settle) {
+      var f = $('#settleFrame');
+      if (!f.getAttribute('src')) f.setAttribute('src', 'settle.html');
+      return;
+    }
+
     // 탭별 필터 노출: 기본=마커/웹활용 · 계산서=기호/계산서형태 · 계약=계약상태
     $('#fltMarker').style.display = v === 'base' ? '' : 'none';
     $('#fltWeb').style.display = v === 'base' ? '' : 'none';
@@ -722,28 +779,22 @@
     var badge = $('#modeBadge');
     if (LIVE) { badge.textContent = '● 라이브(구글시트 연동)'; badge.className = 'badge-mode live'; }
     else { badge.textContent = '● 데모(읽기전용 · seed.json)'; badge.className = 'badge-mode demo'; }
-    $('#importBtn').style.display = LIVE ? 'inline-block' : 'none';
-    $('#mergeBtn').style.display = LIVE ? 'inline-block' : 'none';
     $('#uploadBtn').style.display = LIVE ? 'inline-block' : 'none';
 
     // 툴바 이벤트
     $('#search').addEventListener('input', function () { STATE.filter.q = this.value; applyFilter(); });
     $('#fltMarker').addEventListener('change', function () { STATE.filter.marker = this.value; applyFilter(); });
     $('#fltWeb').addEventListener('change', function () { STATE.filter.web = this.value; applyFilter(); });
-    $('#fltStatus').addEventListener('change', function () { STATE.filter.status = this.value; applyFilter(); });
     $('#fltInv').addEventListener('change', function () { STATE.filter.inv = this.value; applyFilter(); });
     $('#fltSym').addEventListener('change', function () { STATE.filter.sym = this.value; applyFilter(); });
     $('#fltCon').addEventListener('change', function () { STATE.filter.con = this.value; applyFilter(); });
     $('#resetBtn').addEventListener('click', function () {
-      STATE.filter = { gubun: '', marker: '', web: '', status: '', inv: '', sym: '', con: '', q: '' };
+      STATE.filter = { gubun: '', marker: '', web: '', inv: '', sym: '', con: '', q: '' };
       $('#search').value = ''; syncControls(); applyFilter();
     });
     $$('.tab-btn').forEach(function (b) {
       b.addEventListener('click', function () { setView(b.getAttribute('data-view')); });
     });
-    $('#addBtn').addEventListener('click', function () { openModal(null); });
-    $('#importBtn').addEventListener('click', importSeed);
-    $('#mergeBtn').addEventListener('click', runMerge);
     $('#uploadBtn').addEventListener('click', openUpload);
     $('#reloadBtn').addEventListener('click', load);
 
