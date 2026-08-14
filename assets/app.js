@@ -46,29 +46,23 @@
     var map = { o: 'O', O: 'O', '○': 'O', 'Ｏ': 'O', x: 'X', X: 'X', '×': 'X', '?': '?', '？': '?' };
     return map[m[1]] || '';
   }
-  // 구분 + 마커 -> 전달 기본값
-  function derive(gubun, marker) {
-    var d = { 웹활용: '', 소통채널: '', 접수대행: '', 유선접수전달: '', 유선개통전달: '', 무선개통전달: '', 회신전달: '', 직접접수: '', 상태: '활성' };
-    if (gubun === '판매점') {
-      d.웹활용 = 'N'; d.소통채널 = '카카오톡채널'; d.접수대행 = 'Y'; d.유선접수전달 = 'Y';
-      d.유선개통전달 = 'Y'; d.무선개통전달 = 'Y'; d.회신전달 = 'Y'; d.직접접수 = 'N';
-      if (marker === 'O') d.웹활용 = 'Y';
-    } else if (gubun === '협력점') {
-      d.소통채널 = '카카오톡단체방'; d.무선개통전달 = 'Y';
-      if (marker === 'O') { d.웹활용 = 'N'; d.접수대행 = 'Y'; d.유선접수전달 = 'Y'; d.유선개통전달 = 'Y'; d.회신전달 = 'Y'; }
-      else if (marker === 'X') { d.웹활용 = 'Y'; d.접수대행 = 'N'; d.유선접수전달 = 'N'; d.유선개통전달 = 'N'; d.회신전달 = 'N'; }
-      else { d.상태 = '보류'; }
-    } else if (gubun === '자점') {
-      d.웹활용 = 'Y'; d.소통채널 = '어드민'; d.접수대행 = 'N'; d.유선접수전달 = 'N';
-      d.유선개통전달 = 'N'; d.무선개통전달 = 'N'; d.회신전달 = 'N'; d.직접접수 = 'N';
-    }
+  // 구분 + 마커 -> 웹접수/웹회신 기본값
+  //  · 마커 X = 업체가 직접 웹 처리 → 웹접수 Y · 웹회신 Y
+  //  · 마커 O = 대신 전달 → 웹접수 N · 웹회신 N
+  //  · 마커 없음(판매점 기본 등) = 웹활용 여부 따라, 기본 N
+  function derive(gubun, marker, webY) {
+    var d = { 소통채널: '', 웹접수: 'N', 웹회신: 'N', 상태: '활성' };
+    if (gubun === '판매점') d.소통채널 = '카카오톡채널';
+    else if (gubun === '협력점') d.소통채널 = '카카오톡단체방';
+    if (marker === 'X') { d.웹접수 = 'Y'; d.웹회신 = 'Y'; }
+    else if (marker === 'O') { d.웹접수 = 'N'; d.웹회신 = 'N'; }
+    else if (webY === 'Y') { d.웹접수 = 'Y'; d.웹회신 = 'Y'; }
     return d;
   }
 
   /* ============ 상태 ============ */
-  var STATE = { all: [], view: [], filter: { gubun: '', marker: '', web: '', inv: '', sym: '', con: '', q: '' } };
-  var VIEW = 'base'; // base | invoice | contract
-  var DELIV_FIELDS = ['접수대행', '유선접수전달', '유선개통전달', '무선개통전달', '회신전달'];
+  var STATE = { all: [], view: [], filter: { gubun: '', marker: '', web: '', dormant: false, inv: '', sym: '', con: '', q: '' } };
+  var VIEW = 'base'; // base | invoice | contract | settle
   var EDITING = null; // 수정 중인 원본 레코드 (출처 등 폼에 없는 필드 보존용)
 
   /* ============ API ============ */
@@ -195,20 +189,20 @@
   // 계약 상태 판정: 제외 > 완료 > 만료 > 진행중 > 미진행 > 정보없음
   function conState(c) {
     if (c.계약제외 === 'Y') return '제외';
-    if (!c.계약서1) return '정보없음';
-    if (c.계약서1 === 'Y' && c.계약서2 === 'Y') return '완료';
+    if (!c.위탁판매) return '정보없음';
+    if (c.위탁판매 === 'Y' && c.개인정보 === 'Y') return '완료';
     if ((c.계약비고 || '').indexOf('만료') >= 0) return '만료';
-    if (c.계약서1 === 'Y' || c.계약서2 === 'Y') return '진행중';
+    if (c.위탁판매 === 'Y' || c.개인정보 === 'Y') return '진행중';
     return '미진행';
   }
 
   function computeStats() {
-    var s = { total: STATE.all.length, 판매점: 0, 협력점: 0, 자점: 0, hold: 0, 정발행: 0, 역발행: 0, 원천세: 0, 계약완료: 0 };
+    var s = { total: STATE.all.length, 판매점: 0, 협력점: 0, 휴면: 0, 정발행: 0, 역발행: 0, 원천세: 0, 계약완료: 0 };
     STATE.all.forEach(function (c) {
       if (s[c.업체구분] !== undefined) s[c.업체구분]++;
-      if (c.상태 === '보류') s.hold++;
+      if (c.상태 === '휴면') s.휴면++;
       if (s[c.계산서형태] !== undefined) s[c.계산서형태]++;
-      if (c.계약서1 === 'Y' && c.계약서2 === 'Y') s.계약완료++;
+      if (c.위탁판매 === 'Y' && c.개인정보 === 'Y') s.계약완료++;
     });
     return s;
   }
@@ -218,7 +212,7 @@
       statCard('', 'total', s.total, '전체 업체'),
       statCard('sales', '판매점', s.판매점, '판매점'),
       statCard('partner', '협력점', s.협력점, '협력점'),
-      statCard('own', '자점', s.자점, '자점')
+      statCard('hold', 'dormant', s.휴면, '휴면(미거래)')
     ];
     if (VIEW === 'invoice') {
       cards = [
@@ -245,7 +239,8 @@
     $$('#stats .stat').forEach(function (el) {
       el.onclick = function () {
         var key = el.getAttribute('data-key');
-        if (key === 'total') { STATE.filter.gubun = ''; STATE.filter.inv = ''; STATE.filter.con = ''; }
+        if (key === 'total') { STATE.filter.gubun = ''; STATE.filter.inv = ''; STATE.filter.con = ''; STATE.filter.dormant = false; }
+        else if (key === 'dormant') { STATE.filter.dormant = !STATE.filter.dormant; }
         else if (key.indexOf('inv:') === 0) {
           var v = key.slice(4);
           STATE.filter.inv = STATE.filter.inv === v ? '' : v;
@@ -261,9 +256,10 @@
   }
   function statCard(cls, key, n, label) {
     var active = (key === STATE.filter.gubun)
+      || (key === 'dormant' && STATE.filter.dormant)
       || (key.indexOf('inv:') === 0 && STATE.filter.inv === key.slice(4))
       || (key.indexOf('con:') === 0 && STATE.filter.con === key.slice(4))
-      || (key === 'total' && !STATE.filter.gubun && !STATE.filter.inv && !STATE.filter.con);
+      || (key === 'total' && !STATE.filter.gubun && !STATE.filter.inv && !STATE.filter.con && !STATE.filter.dormant);
     return '<div class="stat ' + cls + (active ? ' active' : '') + '" data-key="' + key + '">' +
       '<div class="n">' + n + '</div><div class="l">' + label + '</div></div>';
   }
@@ -271,10 +267,11 @@
   function applyFilter() {
     var f = STATE.filter, q = f.q.trim().toLowerCase();
     STATE.view = STATE.all.filter(function (c) {
-      if (VIEW === 'invoice' && c.업체구분 === '자점') return false; // 자점은 계산서 발행 안 함
+      if ((VIEW === 'invoice' || VIEW === 'contract') && c.상태 === '휴면') return false; // 휴면(미거래)은 계산서·계약 화면에서 제외
+      if (f.dormant && c.상태 !== '휴면') return false;
       if (f.gubun && c.업체구분 !== f.gubun) return false;
       if (f.marker && (c.전달마커 || '') !== f.marker) return false;
-      if (f.web && (c.웹활용 || '') !== f.web) return false;
+      if (f.web && (c.웹접수 || '') !== f.web) return false;
       if (f.inv) {
         var iv = c.계산서형태 || '';
         if (f.inv === '__none' ? iv !== '' : iv !== f.inv) return false;
@@ -293,13 +290,12 @@
 
   var THEADS = {
     base: '<tr><th>업체 / 소속(원문)</th><th>구분</th><th>마커</th><th>소통채널</th>' +
-      '<th title="웹활용">웹</th><th title="어드민 접수 대행">접수</th><th title="유선 접수이력 전달">유선접수</th>' +
-      '<th title="유선 개통완료 전달">유선개통</th><th title="무선 개통완료 전달(항상)">무선개통</th><th title="회신내용 전달">회신</th>' +
+      '<th>웹접수</th><th>웹회신</th>' +
       '<th title="계정수">계정</th><th>상태</th><th>비고</th><th></th></tr>',
-    invoice: '<tr><th>기호</th><th>업체 / 소속(원문)</th><th>구분</th><th>법인</th><th>계산서형태</th><th>수신방법</th><th>계산서 비고</th><th>상태</th><th></th></tr>',
-    contract: '<tr><th>업체 / 소속(원문)</th><th>구분</th><th>계약상태</th><th>대표자</th><th>연락처</th><th>계약①</th><th>계약②</th><th>사업자</th><th>계약 비고</th><th></th></tr>'
+    invoice: '<tr><th>기호</th><th>업체 / 소속(원문)</th><th>구분</th><th>법인</th><th>계산서형태</th><th>수신방법</th><th>사업자</th><th>계산서 비고</th><th></th></tr>',
+    contract: '<tr><th>업체 / 소속(원문)</th><th>구분</th><th>계약상태</th><th>대표자</th><th>연락처</th><th>위탁판매</th><th>개인정보</th><th>보증보험</th><th>계약 비고</th><th></th></tr>'
   };
-  var VIEW_COLS = { base: 14, invoice: 9, contract: 10 };
+  var VIEW_COLS = { base: 10, invoice: 9, contract: 10 };
   var CON_CHIP = { 완료: 'status-활성', 진행중: 'g-자점', 미진행: 'g-판매점', 만료: 'status-보류', 제외: 'm-X', 정보없음: 'i-기타' };
 
   function nameCell(c) {
@@ -315,14 +311,10 @@
     return nameCell(c) +
       '<td>' + (mk ? '<span class="chip m-' + esc(mk) + '">' + esc(mk) + '</span>' : '<span class="yn blank">–</span>') + '</td>' +
       '<td>' + esc(c.소통채널 || '') + '</td>' +
-      '<td style="text-align:center">' + yn(c.웹활용) + '</td>' +
-      '<td style="text-align:center">' + yn(c.접수대행) + '</td>' +
-      '<td style="text-align:center">' + yn(c.유선접수전달) + '</td>' +
-      '<td style="text-align:center">' + yn(c.유선개통전달) + '</td>' +
-      '<td style="text-align:center">' + yn(c.무선개통전달) + '</td>' +
-      '<td style="text-align:center">' + yn(c.회신전달) + '</td>' +
+      '<td style="text-align:center">' + yn(c.웹접수) + '</td>' +
+      '<td style="text-align:center">' + yn(c.웹회신) + '</td>' +
       '<td style="text-align:center">' + esc(c.계정수 || '') + '</td>' +
-      '<td><span class="chip status-' + esc(c.상태) + '">' + esc(c.상태) + '</span></td>' +
+      '<td><span class="chip status-' + esc(c.상태) + '">' + esc(c.상태 === '휴면' ? '휴면(미거래)' : c.상태) + '</span></td>' +
       '<td class="note-cell" title="' + esc(c.비고 || '') + '">' + esc(c.비고 || '') + '</td>';
   }
   function rowInvoice(c) {
@@ -331,8 +323,8 @@
       '<td>' + esc(c.법인 || '') + '</td>' +
       '<td>' + invChip(c.계산서형태) + '</td>' +
       '<td>' + esc(c.수신방법 || '') + '</td>' +
-      '<td class="note-cell" title="' + esc(c.계산서비고 || '') + '">' + esc(c.계산서비고 || '') + '</td>' +
-      '<td><span class="chip status-' + esc(c.상태) + '">' + esc(c.상태) + '</span></td>';
+      '<td style="text-align:center">' + yn(c.사업자등록증) + '</td>' +
+      '<td class="note-cell" title="' + esc(c.계산서비고 || '') + '">' + esc(c.계산서비고 || '') + '</td>';
   }
   function rowContract(c) {
     var st = conState(c);
@@ -340,9 +332,9 @@
       '<td><span class="chip ' + (CON_CHIP[st] || '') + '">' + st + '</span></td>' +
       '<td>' + esc(c.대표자 || '') + '</td>' +
       '<td>' + esc(c.연락처 || '') + '</td>' +
-      '<td style="text-align:center">' + yn(c.계약서1) + '</td>' +
-      '<td style="text-align:center">' + yn(c.계약서2) + '</td>' +
-      '<td style="text-align:center">' + yn(c.사업자등록증) + '</td>' +
+      '<td style="text-align:center">' + yn(c.위탁판매) + '</td>' +
+      '<td style="text-align:center">' + yn(c.개인정보) + '</td>' +
+      '<td style="text-align:center">' + yn(c.보증보험) + '</td>' +
       '<td class="note-cell" title="' + esc(c.계약비고 || '') + '">' + esc(c.계약비고 || '') + '</td>';
   }
 
@@ -369,37 +361,44 @@
 
   /* ============ 모달 ============ */
   function blankCompany() {
-    return { id: '', 소속원문: '', 업체명: '', 기호: '', 업체구분: '', 인센티브: 'N', 전달마커: '', 소통채널: '', 웹활용: '', 직접접수: '', 접수대행: '', 유선접수전달: '', 유선개통전달: '', 무선개통전달: '', 회신전달: '', 계정수: '', 대표아이디: '', 연락처: '', 상태: '활성', 비고: '',
-      법인: '', 대표자: '', 계산서형태: '', 수신방법: '', 계산서비고: '', 계약서1: '', 계약서2: '', 사업자등록증: '', 계약제외: '', 계약비고: '', 출처: '' };
+    return { id: '', 소속원문: '', 업체명: '', 기호: '', 업체구분: '', 인센티브: 'N', 전달마커: '', 소통채널: '', 웹접수: '', 웹회신: '', 계정수: '', 대표아이디: '', 연락처: '', 상태: '활성', 비고: '',
+      법인: '', 대표자: '', 계산서형태: '', 수신방법: '', 계산서비고: '', 위탁판매: '', 개인정보: '', 보증보험: '', 사업자등록증: '', 계약제외: '', 계약비고: '', 출처: '' };
   }
+  var SECTION_TITLES = { base: '기본 정보 수정', invoice: '계산서 수정', contract: '계약서·보증보험 수정' };
   function openModal(id) {
     var c = id ? JSON.parse(JSON.stringify(STATE.all.filter(function (x) { return String(x.id) === String(id); })[0])) : blankCompany();
     EDITING = c;
-    $('#modalTitle').textContent = id ? ('업체 수정 · ' + c.업체명) : '신규 업체 추가';
+    // 현재 탭에 해당하는 섹션만 표시
+    var sec = VIEW === 'invoice' ? 'invoice' : (VIEW === 'contract' ? 'contract' : 'base');
+    $('#secBase').style.display = sec === 'base' ? '' : 'none';
+    $('#secInvoice').style.display = sec === 'invoice' ? '' : 'none';
+    $('#secContract').style.display = sec === 'contract' ? '' : 'none';
+    $('#modalTitle').textContent = (SECTION_TITLES[sec] || '업체 수정') + ' · ' + (c.업체명 || '신규');
     $('#f_id').value = c.id || '';
     $('#f_soan').value = c.소속원문 || '';
     $('#f_name').value = c.업체명 || '';
     $('#f_gubun').value = c.업체구분 || '';
     $('#f_marker').value = c.전달마커 || '';
     $('#f_channel').value = c.소통채널 || '';
+    $('#f_wreq').value = c.웹접수 || '';
+    $('#f_wrep').value = c.웹회신 || '';
     $('#f_uid').value = c.대표아이디 || '';
     $('#f_tel').value = c.연락처 || '';
+    $('#f_rep').value = c.대표자 || '';
     $('#f_status').value = c.상태 || '활성';
     $('#f_note').value = c.비고 || '';
-    $('#f_web').value = c.웹활용 || '';
-    DELIV_FIELDS.forEach(function (k) { $('#f_' + k).value = c[k] || ''; });
-    $('#f_rep').value = c.대표자 || '';
-    $('#f_corp').value = c.법인 || '';
     $('#f_inv').value = c.계산서형태 || '';
+    $('#f_corp').value = c.법인 || '';
     $('#f_invhow').value = c.수신방법 || '';
-    $('#f_invnote').value = c.계산서비고 || '';
-    $('#f_c1').value = c.계약서1 || '';
-    $('#f_c2').value = c.계약서2 || '';
     $('#f_bizdoc').value = c.사업자등록증 || '';
+    $('#f_invnote').value = c.계산서비고 || '';
+    $('#f_wt').value = c.위탁판매 || '';
+    $('#f_pi').value = c.개인정보 || '';
+    $('#f_ins').value = c.보증보험 || '';
     $('#f_cexc').value = c.계약제외 || '';
     $('#f_connote').value = c.계약비고 || '';
     $('#deleteBtn').style.display = id ? 'inline-block' : 'none';
-    updatePreview();
+    if (sec === 'base') updatePreview();
     $('#overlay').classList.add('open');
   }
   function closeModal() { $('#overlay').classList.remove('open'); }
@@ -409,21 +408,21 @@
     if (!soan) return;
     var g = classify(soan);
     $('#f_name').value = companyName(soan);
-    $('#f_gubun').value = g === '미분류' ? '' : g;
-    var d = derive(g, $('#f_marker').value || '');
+    $('#f_gubun').value = (g === '미분류' || g === '자점') ? '' : g;
+    var mk = markerFromName(soan) || $('#f_marker').value || '';
+    $('#f_marker').value = mk;
+    var d = derive(g, mk);
     $('#f_channel').value = d.소통채널;
-    $('#f_web').value = d.웹활용;
-    $('#f_status').value = d.상태;
-    DELIV_FIELDS.forEach(function (k) { $('#f_' + k).value = d[k]; });
+    $('#f_wreq').value = d.웹접수;
+    $('#f_wrep').value = d.웹회신;
     updatePreview();
   }
   function reapplyDefaults() {
     var g = $('#f_gubun').value, mk = $('#f_marker').value;
     var d = derive(g, mk);
     $('#f_channel').value = d.소통채널;
-    $('#f_web').value = d.웹활용;
-    if (d.상태) $('#f_status').value = d.상태;
-    DELIV_FIELDS.forEach(function (k) { $('#f_' + k).value = d[k]; });
+    $('#f_wreq').value = d.웹접수;
+    $('#f_wrep').value = d.웹회신;
     updatePreview();
   }
   function updatePreview() {
@@ -432,7 +431,7 @@
     var sym = leadSymbol(soan);
     var inc = isIncentive(soan);
     $('#preview').innerHTML = '자동판정 → 기호 <b>' + (esc(sym) || '없음') + '</b> · 구분 <b>' + esc(g || '미분류') +
-      '</b>' + (inc ? ' · <b>인센티브</b>' : '') + ' · 무선개통전달은 판매점/협력점 항상 <b>Y</b>';
+      '</b>' + (inc ? ' · <b>인센티브</b>' : '') + ' · 마커 X=웹접수·웹회신 <b>Y</b>, O=둘 다 <b>N</b>';
   }
   function collectForm() {
     // 수정 시 원본에서 시작해 폼에 없는 필드(출처 등)를 보존
@@ -445,19 +444,20 @@
     c.인센티브 = isIncentive(c.소속원문) ? 'Y' : 'N';
     c.전달마커 = $('#f_marker').value;
     c.소통채널 = $('#f_channel').value;
-    c.웹활용 = $('#f_web').value;
+    c.웹접수 = $('#f_wreq').value;
+    c.웹회신 = $('#f_wrep').value;
     c.대표아이디 = $('#f_uid').value.trim();
     c.연락처 = $('#f_tel').value.trim();
     c.상태 = $('#f_status').value;
     c.비고 = $('#f_note').value.trim();
-    DELIV_FIELDS.forEach(function (k) { c[k] = $('#f_' + k).value; });
     c.대표자 = $('#f_rep').value.trim();
     c.법인 = $('#f_corp').value;
     c.계산서형태 = $('#f_inv').value;
     c.수신방법 = $('#f_invhow').value.trim();
     c.계산서비고 = $('#f_invnote').value.trim();
-    c.계약서1 = $('#f_c1').value;
-    c.계약서2 = $('#f_c2').value;
+    c.위탁판매 = $('#f_wt').value;
+    c.개인정보 = $('#f_pi').value;
+    c.보증보험 = $('#f_ins').value;
     c.사업자등록증 = $('#f_bizdoc').value;
     c.계약제외 = $('#f_cexc').value;
     c.계약비고 = $('#f_connote').value.trim();
@@ -556,7 +556,7 @@
       if (k1 && !byKey[k1]) byKey[k1] = x;
       if (k2 && !byKey[k2]) byKey[k2] = x;
     });
-    var seen = {}, cands = [], changes = [], same = 0, total = 0;
+    var seen = {}, cands = [], changes = [], same = 0, total = 0, own = 0;
     for (var r = UP.headerRow + 1; r < UP.grid.length; r++) {
       var raw = String((UP.grid[r] || [])[UP.colIdx] || '').trim();
       if (!raw) continue;
@@ -564,6 +564,7 @@
       var key = normKey(raw);
       if (!key || seen[key]) continue;
       seen[key] = 1;
+      if (classify(raw) === '자점') { own++; continue; } // 자점은 등록/현행화 대상 아님
       var ex = byKey[key];
       if (ex) {
         // 이름은 같은데 기호/소속 원문이 달라짐 → 현행화 후보
@@ -586,7 +587,7 @@
     UP.candidates = cands;
     UP.changes = changes;
     $('#upSummary').style.display = '';
-    $('#upSummary').innerHTML = '리스트 <b>' + total + '건</b> → 🆕 신규 <b>' + cands.length + '개</b> · 🔄 기호/소속 변경 <b>' + changes.length + '개</b> · 기존과 동일 <b>' + same + '건</b>';
+    $('#upSummary').innerHTML = '리스트 <b>' + total + '건</b> → 🆕 신규 <b>' + cands.length + '개</b> · 🔄 기호/소속 변경 <b>' + changes.length + '개</b> · 기존과 동일 <b>' + same + '건</b>' + (own ? ' · 자점 제외 <b>' + own + '건</b>' : '');
     renderUploadTable();
     renderChangeTable();
   }
@@ -667,9 +668,8 @@
       return {
         소속원문: soan, 업체명: p.업체명, 기호: leadSymbol(soan), 업체구분: g,
         인센티브: isIncentive(soan) ? 'Y' : 'N', 전달마커: mk,
-        소통채널: d.소통채널, 웹활용: d.웹활용, 직접접수: d.직접접수, 접수대행: d.접수대행,
-        유선접수전달: d.유선접수전달, 유선개통전달: d.유선개통전달, 무선개통전달: d.무선개통전달,
-        회신전달: d.회신전달, 상태: d.상태 || '활성', 출처: '개통리스트'
+        소통채널: d.소통채널, 웹접수: d.웹접수, 웹회신: d.웹회신,
+        상태: '활성', 출처: '개통리스트'
       };
     });
     // 현행화: 소속/기호/구분/인센티브/마커만 갱신 (전달 체크리스트·계산서·계약 값은 유지)
@@ -760,8 +760,16 @@
   function load() {
     $('#tbody').innerHTML = '<tr><td colspan="' + VIEW_COLS[VIEW] + '" class="empty"><span class="spin"></span> 불러오는 중…</td></tr>';
     return apiList().then(function (list) {
-      STATE.all = list.map(function (c) { // 숫자화
+      STATE.all = list.filter(function (c) {
+        return c.업체구분 !== '자점'; // 자점은 앱에서 다루지 않음
+      }).map(function (c) {
         c.계정수 = c.계정수 === '' ? '' : (Number(c.계정수) || c.계정수);
+        // 웹접수/웹회신 값이 아직 없으면 마커·웹활용 기준으로 표시값 유도 (저장 시 확정)
+        if (!c.웹접수 || !c.웹회신) {
+          var d = derive(c.업체구분, c.전달마커 || '', c.웹활용 || '');
+          if (!c.웹접수) c.웹접수 = d.웹접수;
+          if (!c.웹회신) c.웹회신 = d.웹회신;
+        }
         return c;
       });
       populateSymFilter();

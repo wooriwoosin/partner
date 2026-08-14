@@ -40,7 +40,7 @@
     <div class="tabs">
       <button class="btn sm tab-btn active" data-view="base">기본 정보</button>
       <button class="btn sm tab-btn" data-view="invoice">🧾 계산서</button>
-      <button class="btn sm tab-btn" data-view="contract">📝 전자계약</button>
+      <button class="btn sm tab-btn" data-view="contract">📝 계약서·보증보험</button>
       <button class="btn sm tab-btn" data-view="settle">💰 정산변환</button>
     </div>
 
@@ -52,10 +52,10 @@
         <option value="X">X (미전달·직접웹)</option>
         <option value="?">? (보류)</option>
       </select>
-      <select id="fltWeb" title="웹활용">
-        <option value="">웹활용(전체)</option>
-        <option value="Y">웹활용 Y</option>
-        <option value="N">웹활용 N</option>
+      <select id="fltWeb" title="웹접수">
+        <option value="">웹접수(전체)</option>
+        <option value="Y">웹접수 Y</option>
+        <option value="N">웹접수 N</option>
       </select>
       <select id="fltInv" title="계산서형태" style="display:none">
         <option value="">계산서(전체)</option>
@@ -102,133 +102,99 @@
         <button id="closeModal" class="x">×</button>
       </header>
       <div class="body">
-        <div class="grid2">
-          <div class="field full">
-            <label>소속 (원문) — 앞 기호로 자동판정</label>
-            <div style="display:flex; gap:8px;">
-              <input id="f_soan" placeholder="예: ★★기가몬스터●  /  ■■보라네트워크  /  0.영업정산" style="flex:1" />
-              <button id="autofillBtn" class="btn sm">자동채우기</button>
-            </div>
-            <span class="hint">■□=판매점 · ★☆=협력점 · ◆◇=인센티브협력점 · 숫자/앞●=자점</span>
-          </div>
-          <div id="preview" class="preview-box"></div>
-
-          <div class="field">
-            <label>업체명</label>
-            <input id="f_name" />
-          </div>
-          <div class="field">
-            <label>업체구분</label>
-            <select id="f_gubun">
-              <option value="">선택</option>
-              <option value="판매점">판매점</option>
-              <option value="협력점">협력점</option>
-              <option value="자점">자점</option>
-            </select>
-          </div>
-
-          <div class="field">
-            <label>전달마커 (사원명 괄호)</label>
-            <select id="f_marker">
-              <option value="">없음</option>
-              <option value="O">O — 전달</option>
-              <option value="X">X — 미전달(직접 웹처리)</option>
-              <option value="?">? — 보류</option>
-            </select>
-          </div>
-          <div class="field">
-            <label>소통채널</label>
-            <select id="f_channel">
-              <option value="">선택</option>
-              <option value="카카오톡채널">카카오톡채널(판매점)</option>
-              <option value="카카오톡단체방">카카오톡단체방(협력점)</option>
-              <option value="어드민">어드민(자점)</option>
-            </select>
-          </div>
-
-          <div class="field">
-            <label>웹활용</label>
-            <select id="f_web"><option value="">-</option><option value="Y">Y</option><option value="N">N</option></select>
-          </div>
-          <div class="field">
-            <label>상태</label>
-            <select id="f_status"><option value="활성">활성</option><option value="보류">보류(정리대상)</option></select>
-          </div>
-
-          <div class="deliv-group">
-            <div class="gh">전달 체크리스트 (구분·마커 선택시 기본값 자동세팅 · 개별 수정 가능)</div>
-            <div class="toggles">
-              <div class="toggle"><label>접수대행</label><select id="f_접수대행"><option value="">-</option><option value="Y">Y</option><option value="N">N</option></select></div>
-              <div class="toggle"><label>유선접수전달</label><select id="f_유선접수전달"><option value="">-</option><option value="Y">Y</option><option value="N">N</option></select></div>
-              <div class="toggle"><label>유선개통전달</label><select id="f_유선개통전달"><option value="">-</option><option value="Y">Y</option><option value="N">N</option></select></div>
-              <div class="toggle"><label>무선개통전달</label><select id="f_무선개통전달"><option value="">-</option><option value="Y">Y</option><option value="N">N</option></select></div>
-              <div class="toggle"><label>회신전달</label><select id="f_회신전달"><option value="">-</option><option value="Y">Y</option><option value="N">N</option></select></div>
-            </div>
-          </div>
-
-          <div class="field">
-            <label>대표 아이디</label>
-            <input id="f_uid" />
-          </div>
-          <div class="field">
-            <label>연락처</label>
-            <input id="f_tel" />
-          </div>
-          <div class="field">
-            <label>대표자</label>
-            <input id="f_rep" />
-          </div>
-          <div class="field">
-            <label>법인 (계산서 발행)</label>
-            <select id="f_corp">
-              <option value="">-</option>
-              <option value="웨이브넷">웨이브넷</option>
-              <option value="우성">우성</option>
-              <option value="우신">우신</option>
-            </select>
-          </div>
-
-          <div class="deliv-group">
-            <div class="gh">🧾 계산서 방식</div>
-            <div class="grid2" style="margin-bottom:8px">
-              <div class="field">
-                <label>계산서형태</label>
-                <select id="f_inv">
-                  <option value="">-</option>
-                  <option value="정발행">정발행</option>
-                  <option value="역발행">역발행</option>
-                  <option value="원천세">원천세</option>
-                  <option value="기타">기타</option>
-                </select>
-              </div>
-              <div class="field">
-                <label>수신방법 (예: 카톡/엑셀 · 채널/이미지 · 메일/엑셀)</label>
-                <input id="f_invhow" />
-              </div>
-            </div>
+        <!-- 기본 정보 섹션 -->
+        <div id="secBase">
+          <div class="grid2">
             <div class="field full">
-              <label>계산서 비고 (발송 규칙 등)</label>
-              <textarea id="f_invnote" rows="2"></textarea>
+              <label>소속 (원문) — 앞 기호로 자동판정</label>
+              <div style="display:flex; gap:8px;">
+                <input id="f_soan" placeholder="예: ★★기가몬스터  /  ■■보라네트워크" style="flex:1" />
+                <button id="autofillBtn" class="btn sm">자동채우기</button>
+              </div>
+              <span class="hint">■□=판매점 · ★☆=협력점 · ◆◇=인센티브협력점</span>
             </div>
-          </div>
+            <div id="preview" class="preview-box"></div>
 
-          <div class="deliv-group">
-            <div class="gh">📝 전자계약</div>
-            <div class="toggles" style="margin-bottom:8px">
-              <div class="toggle"><label>계약서①</label><select id="f_c1"><option value="">-</option><option value="Y">Y</option><option value="N">N</option></select></div>
-              <div class="toggle"><label>계약서②</label><select id="f_c2"><option value="">-</option><option value="Y">Y</option><option value="N">N</option></select></div>
-              <div class="toggle"><label>사업자등록증</label><select id="f_bizdoc"><option value="">-</option><option value="Y">Y</option><option value="N">N</option></select></div>
-              <div class="toggle"><label>계약제외</label><select id="f_cexc"><option value="">-</option><option value="Y">Y</option><option value="N">N</option></select></div>
+            <div class="field"><label>업체명</label><input id="f_name" /></div>
+            <div class="field">
+              <label>업체구분</label>
+              <select id="f_gubun">
+                <option value="">선택</option>
+                <option value="판매점">판매점</option>
+                <option value="협력점">협력점</option>
+              </select>
             </div>
-            <div class="field full">
-              <label>계약 비고 (만료/톡안봄 등)</label>
-              <textarea id="f_connote" rows="2"></textarea>
+            <div class="field">
+              <label>전달마커 (사원명 괄호 O/X)</label>
+              <select id="f_marker">
+                <option value="">없음</option>
+                <option value="O">O</option>
+                <option value="X">X</option>
+                <option value="?">?</option>
+              </select>
             </div>
+            <div class="field">
+              <label>소통채널</label>
+              <select id="f_channel">
+                <option value="">선택</option>
+                <option value="카카오톡채널">카카오톡채널(판매점)</option>
+                <option value="카카오톡단체방">카카오톡단체방(협력점)</option>
+                <option value="어드민">어드민</option>
+              </select>
+            </div>
+            <div class="field"><label>웹접수</label><select id="f_wreq"><option value="">-</option><option value="Y">Y</option><option value="N">N</option></select></div>
+            <div class="field"><label>웹회신</label><select id="f_wrep"><option value="">-</option><option value="Y">Y</option><option value="N">N</option></select></div>
+            <div class="field"><label>대표 아이디</label><input id="f_uid" /></div>
+            <div class="field"><label>연락처</label><input id="f_tel" /></div>
+            <div class="field"><label>대표자</label><input id="f_rep" /></div>
+            <div class="field">
+              <label>상태</label>
+              <select id="f_status">
+                <option value="활성">활성</option>
+                <option value="휴면">휴면(미거래)</option>
+                <option value="보류">보류(구분류)</option>
+              </select>
+            </div>
+            <div class="field full"><label>비고</label><textarea id="f_note" rows="2"></textarea></div>
           </div>
+        </div>
 
-          <div class="field full">
-            <label>비고</label>
-            <textarea id="f_note" rows="2"></textarea>
+        <!-- 계산서 섹션 -->
+        <div id="secInvoice" style="display:none">
+          <div class="grid2">
+            <div class="field">
+              <label>계산서형태</label>
+              <select id="f_inv">
+                <option value="">-</option>
+                <option value="정발행">정발행</option>
+                <option value="역발행">역발행</option>
+                <option value="원천세">원천세</option>
+                <option value="기타">기타</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>법인 (계산서 발행)</label>
+              <select id="f_corp">
+                <option value="">-</option>
+                <option value="웨이브넷">웨이브넷</option>
+                <option value="우성">우성</option>
+                <option value="우신">우신</option>
+              </select>
+            </div>
+            <div class="field"><label>수신방법 (예: 카톡/엑셀 · 채널/이미지)</label><input id="f_invhow" /></div>
+            <div class="field"><label>사업자등록증</label><select id="f_bizdoc"><option value="">-</option><option value="Y">Y</option><option value="N">N</option></select></div>
+            <div class="field full"><label>계산서 비고 (발송 규칙 등)</label><textarea id="f_invnote" rows="2"></textarea></div>
+          </div>
+        </div>
+
+        <!-- 계약서·보증보험 섹션 -->
+        <div id="secContract" style="display:none">
+          <div class="grid2">
+            <div class="field"><label>위탁판매 계약서</label><select id="f_wt"><option value="">-</option><option value="Y">Y</option><option value="N">N</option></select></div>
+            <div class="field"><label>개인정보 계약서</label><select id="f_pi"><option value="">-</option><option value="Y">Y</option><option value="N">N</option></select></div>
+            <div class="field"><label>보증보험</label><select id="f_ins"><option value="">-</option><option value="Y">Y</option><option value="N">N</option></select></div>
+            <div class="field"><label>계약제외</label><select id="f_cexc"><option value="">-</option><option value="Y">Y</option><option value="N">N</option></select></div>
+            <div class="field full"><label>계약 비고 (만료/톡안봄 등)</label><textarea id="f_connote" rows="2"></textarea></div>
           </div>
         </div>
         <input type="hidden" id="f_id" />
