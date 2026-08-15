@@ -11,7 +11,7 @@
  */
 
 // 배포된 코드 버전 — 프론트가 이 값으로 "구버전 배포"를 감지해 경고를 띄웁니다.
-var CODE_VERSION = '2026-08-15d';
+var CODE_VERSION = '2026-08-15e';
 
 var SPREADSHEET_ID = '1shhA5RdXP7DiaMIyR33bTG2jFj4SFqumYflY0lF0pwc';
 var SHEET_NAME = '업체관리';
@@ -557,10 +557,17 @@ function 일괄현행화_(apply) {
   });
 
   var rows = readAll_();
-  var byKey = {};
+  // 정확히 일치하는 이름 색인과, 괄호를 뗀 변형 색인을 따로 만든다.
+  // 변형이 여러 업체에 걸리면(예: 신에이치엠 지점들) 어느 행인지 알 수 없으므로 매칭하지 않는다.
+  var exactKey = {}, varKey = {}, varDup = {};
   rows.forEach(function (r) {
+    [normName_(r['업체명']), normName_(r['소속원문'])].forEach(function (k) {
+      if (k && !exactKey[k]) exactKey[k] = r;
+    });
     nameVariants_(r['업체명']).concat(nameVariants_(r['소속원문'])).forEach(function (k) {
-      if (k && !byKey[k]) byKey[k] = r;
+      if (!k) return;
+      if (varKey[k] && varKey[k] !== r) varDup[k] = true;
+      else if (!varKey[k]) varKey[k] = r;
     });
   });
 
@@ -572,8 +579,18 @@ function 일괄현행화_(apply) {
     var g = classifyOf_(raw);
     if (g === '자점') { own++; return; }               // 자점 줄은 건드리지 않음
 
-    var ex = null, vs = nameVariants_(raw);
-    for (var i = 0; i < vs.length && !ex; i++) ex = byKey[vs[i]] || null;
+    var ex = exactKey[normName_(raw)] || null;
+    if (!ex) {
+      var vs = nameVariants_(raw), ambiguous = false;
+      for (var i = 0; i < vs.length && !ex; i++) {
+        if (varDup[vs[i]]) { ambiguous = true; continue; }
+        ex = varKey[vs[i]] || null;
+      }
+      if (!ex && ambiguous) {
+        report.push(['중복매칭', '', '', raw, '같은 이름의 업체가 시트에 여러 개(지점 등) — 자동 변경하지 않음. 필요하면 앱에서 개별 수정']);
+        notFound++; return;
+      }
+    }
     if (!ex) { notFound++; report.push(['매칭없음', '', '', raw, '시트에 없는 업체 — 아무 것도 하지 않음']); return; }
 
     // 마커 규칙
@@ -587,8 +604,14 @@ function 일괄현행화_(apply) {
     var inc = /^[◆◇]/.test(raw) ? 'Y' : 'N';
     var web = (mk === 'X') ? 'Y' : 'N';                // X=직접 웹처리 Y/Y · 그 외 N/N
 
+    // 소속원문은 앞 기호만 바꾸고 본문은 시트 값을 유지한다.
+    //  예) 시트 '■폰찍좌 4호점○(이티이브이)' + 원장 기호 '■' → 그대로 (괄호 설명 보존)
+    //      시트 '★★기가몬스터●(에이블정보통신)' + 원장 기호 '★' → '★기가몬스터●(에이블정보통신)'
+    var body = String(ex['소속원문'] || '').replace(/^[■□★☆◆◇]+/, '');
+    var newSoan = body ? (sym + body) : raw;
+
     var diffs = [];
-    if (String(ex['소속원문'] || '').trim() !== raw) diffs.push('소속 ' + (ex['소속원문'] || '(없음)') + '→' + raw);
+    if (String(ex['소속원문'] || '').trim() !== newSoan) diffs.push('소속 ' + (ex['소속원문'] || '(없음)') + '→' + newSoan);
     if (String(ex['기호'] || '') !== sym) diffs.push('기호 ' + (ex['기호'] || '없음') + '→' + (sym || '없음'));
     if (String(ex['업체구분'] || '') !== g) diffs.push('구분 ' + (ex['업체구분'] || '?') + '→' + g);
     if (String(ex['인센티브'] || '') !== inc) diffs.push('인센티브 ' + (ex['인센티브'] || '') + '→' + inc);
@@ -598,10 +621,10 @@ function 일괄현행화_(apply) {
 
     if (!diffs.length) { same++; return; }
     changed++;
-    report.push(['변경', ex['업체명'], ex['소속원문'], raw, diffs.join(' | ')]);
+    report.push(['변경', ex['업체명'], ex['소속원문'], newSoan, diffs.join(' | ')]);
 
     if (apply) {
-      ex['소속원문'] = raw; ex['기호'] = sym; ex['업체구분'] = g;
+      ex['소속원문'] = newSoan; ex['기호'] = sym; ex['업체구분'] = g;
       ex['인센티브'] = inc; ex['전달마커'] = mk;
       ex['웹접수'] = web; ex['웹회신'] = web;
       ex['수정일시'] = new Date();

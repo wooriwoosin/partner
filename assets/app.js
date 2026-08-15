@@ -733,6 +733,14 @@
     return out;
   }
 
+  // 소속원문은 앞 기호만 갱신하고 본문(괄호 부가설명·지점명)은 시트 값을 유지한다.
+  function applySymbolOnly(oldSoan, newRaw) {
+    var m = String(newRaw || '').match(/^([■□★☆◆◇]+)/);
+    var sym = m ? m[1] : '';
+    var body = String(oldSoan || '').replace(/^[■□★☆◆◇]+/, '');
+    return body ? (sym + body) : newRaw;
+  }
+
   function openUpload() {
     UP = { grid: [], headerRow: -1, colIdx: -1, markerCol: -1, isOpeningList: false, candidates: [], changes: [], touched: [] };
     $('#upFile').value = '';
@@ -929,16 +937,27 @@
 
   function buildCandidates() {
     if (UP.colIdx < 0) return;
-    var byKey = {};
+    var exactKey = {}, varKey = {}, varDup = {};
     (STATE.allRaw.length ? STATE.allRaw : STATE.all).forEach(function (x) {
+      [normKey(x.업체명), normKey(x.소속원문)].forEach(function (k) {
+        if (k && !exactKey[k]) exactKey[k] = x;
+      });
       nameVariants(x.업체명).concat(nameVariants(x.소속원문)).forEach(function (k) {
-        if (k && !byKey[k]) byKey[k] = x;
+        if (!k) return;
+        if (varKey[k] && varKey[k] !== x) varDup[k] = true;
+        else if (!varKey[k]) varKey[k] = x;
       });
     });
+    // 정확히 일치 → 없으면 괄호 뗀 변형. 단, 변형이 여러 업체(지점 등)에 걸리면 매칭하지 않는다.
     function findExisting(raw) {
-      var vs = nameVariants(raw);
-      for (var i = 0; i < vs.length; i++) if (byKey[vs[i]]) return byKey[vs[i]];
-      return null;
+      var hit = exactKey[normKey(raw)];
+      if (hit) return hit;
+      var vs = nameVariants(raw), amb = false;
+      for (var i = 0; i < vs.length; i++) {
+        if (varDup[vs[i]]) { amb = true; continue; }
+        if (varKey[vs[i]]) return varKey[vs[i]];
+      }
+      return amb ? 'AMBIGUOUS' : null;
     }
     // 1차 스캔: 같은 소속이 여러 줄(사원 여러 명)일 수 있으므로 마커를 모아둔다
     var order = [], rawByKey = {}, mkByKey = {}, total = 0;
@@ -956,7 +975,7 @@
       }
     }
 
-    var cands = [], changes = [], same = 0, own = 0;
+    var cands = [], changes = [], same = 0, own = 0, ambiguous = 0;
     var touched = [];   // 이번 리스트에 등장한 기존 업체 (개통일 기록용)
     for (var oi = 0; oi < order.length; oi++) {
       var key = order[oi];
@@ -965,10 +984,12 @@
       // 마커: 표기가 없으면 판매점은 (O) 로 간주 (■□ 판매점은 대부분 표기 없음)
       var mk = defaultMarker(classify(raw), mkByKey[key] || '');
       var ex = findExisting(raw);
+      if (ex === 'AMBIGUOUS') { ambiguous++; continue; }   // 같은 이름 업체가 여럿 — 손대지 않음
       if (ex) {
         touched.push(ex.id);
         // 기호/소속이 달라졌거나, 휴면 업체에 개통건 발생(→활성 전환) → 현행화 후보
-        var soanChanged = String(ex.소속원문 || '').trim() !== raw;
+        var newSoan = applySymbolOnly(ex.소속원문, raw);
+        var soanChanged = String(ex.소속원문 || '').trim() !== newSoan;
         if (ex.업체구분 === '자점') soanChanged = true;   // 자점→판매/협력점 재분류도 '변경'
         var wake = UP.isOpeningList && ex.상태 === '휴면';   // 개통 실적이 있을 때만 되살린다
         var mkChanged = !!mk && String(ex.전달마커 || '').trim() !== mk;
@@ -976,7 +997,7 @@
           var g2 = classify(raw);
           changes.push({
             id: ex.id, 업체명: ex.업체명,
-            old소속: ex.소속원문 || '', raw: raw,
+            old소속: ex.소속원문 || '', raw: newSoan,
             old기호: ex.기호 || '', new기호: leadSymbol(raw),
             old구분: ex.업체구분 || '', new구분: g2 === '미분류' ? (ex.업체구분 || '') : g2,
             oldInc: ex.인센티브 || 'N', newInc: isIncentive(raw) ? 'Y' : 'N',
@@ -997,6 +1018,7 @@
     $('#upSummary').style.display = '';
     $('#upSummary').innerHTML = '리스트 <b>' + total + '건</b> → 🆕 신규 <b>' + cands.length + '개</b> · 🔄 변경 <b>' + changes.length + '개</b> · 기존과 동일 <b>' + same + '건</b>'
       + (own ? ' · 자점 제외 <b>' + own + '건</b>' : '')
+      + (ambiguous ? ' · <b>동명 업체 ' + ambiguous + '건</b>(지점 등, 자동 변경 안 함)' : '')
       + '<br><span style="color:var(--muted)">📅 적용하면 등장한 <b>' + touched.length + '개</b> 업체에 <b>이번주 개통</b> 기록이 남고, 계약 미완료 업체는 계약 탭 <b>⚠️ 확인필요</b>로 모입니다.</span>';
     renderUploadTable();
     renderChangeTable();
@@ -1192,7 +1214,7 @@
     $('#logWrap').style.display = isLog ? '' : 'none';
     if (settle) {
       var f = $('#settleFrame');
-      if (!f.getAttribute('src')) f.setAttribute('src', 'settle.html?v=20260815g');
+      if (!f.getAttribute('src')) f.setAttribute('src', 'settle.html?v=20260815h');
       return;
     }
     if (isLog) { loadLogs(); return; }
