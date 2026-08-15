@@ -81,10 +81,11 @@
     else if (webY === 'Y') { d.웹접수 = 'Y'; d.웹회신 = 'Y'; }
     return d;
   }
-  // 판매점은 대부분 마커 표기가 없으므로 기본 O (대신 전달). 일부만 (X) 로 들어온다.
+  // 판매점은 (X) 표기가 있을 때만 X, 그 외(O·?·표기없음)는 모두 O 로 본다.
+  // (원장에 (?) 로 적힌 판매점이 물음표로 넘어오는 것을 막기 위함)
   function defaultMarker(gubun, mk) {
-    if (mk) return mk;
-    return gubun === '판매점' ? 'O' : '';
+    if (gubun === '판매점') return mk === 'X' ? 'X' : 'O';
+    return mk || '';
   }
 
   /* ============ 상태 ============ */
@@ -1191,7 +1192,7 @@
     $('#logWrap').style.display = isLog ? '' : 'none';
     if (settle) {
       var f = $('#settleFrame');
-      if (!f.getAttribute('src')) f.setAttribute('src', 'settle.html?v=20260815f');
+      if (!f.getAttribute('src')) f.setAttribute('src', 'settle.html?v=20260815g');
       return;
     }
     if (isLog) { loadLogs(); return; }
