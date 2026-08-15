@@ -11,7 +11,7 @@
  */
 
 // 배포된 코드 버전 — 프론트가 이 값으로 "구버전 배포"를 감지해 경고를 띄웁니다.
-var CODE_VERSION = '2026-08-14b';
+var CODE_VERSION = '2026-08-15a';
 
 var SPREADSHEET_ID = '1shhA5RdXP7DiaMIyR33bTG2jFj4SFqumYflY0lF0pwc';
 var SHEET_NAME = '업체관리';
@@ -37,7 +37,7 @@ var HEADERS = [
   // [계약] — 앱: 📝 계약서·보증보험 탭
   '위탁판매', '개인정보', '보증보험', '계약제외', '계약비고',
   // [관리]
-  '출처', '수정일시'
+  '출처', '등록일', '최근개통일', '수정일시'
 ];
 
 // 이름이 바뀐 컬럼 (새 이름 → 옛 이름). 시트정리 시 옛 이름 값을 새 이름으로 이어받는다.
@@ -405,7 +405,9 @@ function upsert_(company, user) {
         }
       }
     }
-    company.id = nextId_(rows); sh.appendRow(rowFromObj_(company, sheetHeader_(sh)));
+    company.id = nextId_(rows);
+    if (!company['등록일']) company['등록일'] = new Date();
+    sh.appendRow(rowFromObj_(company, sheetHeader_(sh)));
     log_(user, '신규등록', company['업체명'] || ('id ' + company.id), '소속: ' + (company['소속원문'] || '') + ' · 구분: ' + (company['업체구분'] || ''));
     return { ok: true, mode: 'insert', company: company };
   } finally { lock.releaseLock(); }
@@ -464,7 +466,12 @@ function bulkImport_(companies, replace, user) {
     var hdrI = sheetHeader_(sh);
     if (replace) { var last = sh.getLastRow(); if (last > 1) sh.getRange(2, 1, last - 1, hdrI.length).clearContent(); }
     var start = replace ? 1 : nextId_(readAll_()); var now = new Date();
-    var out = companies.map(function (c, idx) { if (!c.id) c.id = start + idx; c['수정일시'] = now; return rowFromObj_(c, hdrI); });
+    var out = companies.map(function (c, idx) {
+      if (!c.id) c.id = start + idx;
+      if (!c['등록일']) c['등록일'] = now;
+      c['수정일시'] = now;
+      return rowFromObj_(c, hdrI);
+    });
     sh.getRange(sh.getLastRow() + 1, 1, out.length, hdrI.length).setValues(out);
     var nms = companies.map(function (c) { return c['업체명'] || ''; }).filter(String);
     log_(user, '개통리스트 신규등록', out.length + '개 업체', nms.slice(0, 40).join(', ') + (nms.length > 40 ? ' 외 ' + (nms.length - 40) + '개' : ''));

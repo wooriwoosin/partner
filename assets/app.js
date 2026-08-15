@@ -90,6 +90,7 @@
   /* ============ 상태 ============ */
   var STATE = { all: [], view: [], filter: { gubun: '', marker: '', web: '', dormant: false, inv: '', sym: '', con: '', q: '' } };
   var VIEW = 'base'; // base | invoice | contract | settle
+  var SORT = { key: '', dir: 1 };   // 표 헤더 클릭 정렬
   var EDITING = null; // 수정 중인 원본 레코드 (출처 등 폼에 없는 필드 보존용)
 
   /* ============ API ============ */
@@ -270,14 +271,37 @@
     return '<span class="yn blank">–</span>';
   }
 
-  // 계약 상태 판정: 제외 > 완료 > 만료 > 진행중 > 미진행 > 정보없음
+  // 이번 주(월요일 00:00) 시작 시각
+  function weekStart() {
+    var d = new Date(); d.setHours(0, 0, 0, 0);
+    var dow = (d.getDay() + 6) % 7;          // 월=0 … 일=6
+    return new Date(d.getTime() - dow * 86400000);
+  }
+  function asDate(v) {
+    if (!v) return null;
+    var d = new Date(v);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  // 이번 주에 개통 실적이 있는가 (개통리스트 업로드 시 기록됨)
+  function openedThisWeek(c) {
+    var d = asDate(c.최근개통일);
+    return !!d && d >= weekStart();
+  }
+  // 최근 7일 내 등록된 신규 업체인가
+  function isNewCompany(c) {
+    var d = asDate(c.등록일);
+    return !!d && (Date.now() - d.getTime()) < 7 * 86400000;
+  }
+
+  // 계약 상태 판정: 제외 > 완료 > 확인필요 > 만료 > 진행중 > 미진행 > 정보없음
   function conState(c) {
     if (c.계약제외 === 'Y') return '제외';
-    if (!c.위탁판매) return '정보없음';
     if (c.위탁판매 === 'Y' && c.개인정보 === 'Y') return '완료';
-    if ((c.계약비고 || '').indexOf('만료') >= 0) return '만료';
     if (c.위탁판매 === 'Y' || c.개인정보 === 'Y') return '진행중';
-    return '미진행';
+    // 계약이 안 된 업체(미진행·만료·정보없음)인데 이번 주 개통 실적이 있으면 → 확인필요
+    var base = !c.위탁판매 ? '정보없음'
+      : ((c.계약비고 || '').indexOf('만료') >= 0 ? '만료' : '미진행');
+    return openedThisWeek(c) ? '확인필요' : base;
   }
 
   // 계약상태는 저장되는 값이 아니라 아래 항목들로 자동 판정됩니다.
@@ -296,11 +320,20 @@
       + ' <span style="color:var(--muted)">— 아래 항목을 바꾸면 자동으로 다시 판정됩니다</span><br>' + CON_RULE;
   }
 
+  // 현재 탭에서 "대상이 되는" 업체 집합 (계산서·계약 탭은 휴면 제외)
+  function baseRows() {
+    if (VIEW === 'invoice' || VIEW === 'contract') {
+      return STATE.all.filter(function (c) { return c.상태 !== '휴면'; });
+    }
+    return STATE.all;
+  }
+
   function computeStats() {
-    var s = { total: STATE.all.length, 판매점: 0, 협력점: 0, 휴면: 0, 정발행: 0, 역발행: 0, 원천세: 0, 계약완료: 0 };
-    STATE.all.forEach(function (c) {
-      if (s[c.업체구분] !== undefined) s[c.업체구분]++;
-      if (c.상태 === '휴면') s.휴면++;
+    var rows = baseRows();
+    var s = { total: rows.length, 판매점: 0, 협력점: 0, 휴면: 0, 정발행: 0, 역발행: 0, 원천세: 0, 계약완료: 0 };
+    rows.forEach(function (c) {
+      if (c.상태 === '휴면') { s.휴면++; }
+      else if (s[c.업체구분] !== undefined) s[c.업체구분]++;   // 판매점·협력점 수는 휴면 제외
       if (s[c.계산서형태] !== undefined) s[c.계산서형태]++;
       if (c.위탁판매 === 'Y' && c.개인정보 === 'Y') s.계약완료++;
     });
@@ -310,23 +343,27 @@
     var s = computeStats();
     var cards = [
       statCard('', 'total', s.total, '전체 업체'),
-      statCard('sales', '판매점', s.판매점, '판매점'),
-      statCard('partner', '협력점', s.협력점, '협력점'),
+      statCard('sales', '판매점', s.판매점, '판매점 (거래중)'),
+      statCard('partner', '협력점', s.협력점, '협력점 (거래중)'),
       statCard('hold', 'dormant', s.휴면, '휴면(미거래)')
     ];
     if (VIEW === 'invoice') {
+      var noInv = baseRows().filter(function (c) {
+        return ['정발행', '역발행', '원천세'].indexOf(c.계산서형태) < 0;
+      }).length;
       cards = [
         statCard('', 'total', s.total, '전체 업체'),
         statCard('inv1', 'inv:정발행', s.정발행, '정발행'),
         statCard('inv2', 'inv:역발행', s.역발행, '역발행'),
         statCard('inv3', 'inv:원천세', s.원천세, '원천세'),
-        statCard('hold', 'inv:__none', s.total - s.정발행 - s.역발행 - s.원천세, '계산서정보 없음/기타')
+        statCard('hold', 'inv:__none', noInv, '계산서정보 없음/기타')
       ];
     } else if (VIEW === 'contract') {
-      var cs = { 완료: 0, 진행중: 0, 미진행: 0, 만료: 0, 제외: 0, 정보없음: 0 };
-      STATE.all.forEach(function (c) { cs[conState(c)]++; });
+      var cs = { 완료: 0, 진행중: 0, 미진행: 0, 만료: 0, 제외: 0, 정보없음: 0, 확인필요: 0 };
+      baseRows().forEach(function (c) { cs[conState(c)]++; });
       cards = [
         statCard('', 'total', s.total, '전체 업체'),
+        statCard('warn', 'con:확인필요', cs.확인필요, '⚠️ 확인필요(이번주 개통)'),
         statCard('partner', 'con:완료', cs.완료, '계약완료'),
         statCard('own', 'con:진행중', cs.진행중, '진행중'),
         statCard('sales', 'con:미진행', cs.미진행, '미진행'),
@@ -388,17 +425,48 @@
     renderTable();
   }
 
-  var THEADS = {
-    base: '<tr><th>업체 / 소속(원문)</th><th>구분</th><th>대표자</th><th>연락처</th><th>마커</th>' +
-      '<th>웹접수</th><th>웹회신</th><th>소통채널</th><th>상태</th><th>비고</th><th></th></tr>',
-    invoice: '<tr><th>기호</th><th>업체 / 소속(원문)</th><th>구분</th><th>법인</th><th>계산서형태</th><th>수신방법</th><th>사업자</th><th>계산서 비고</th><th></th></tr>',
-    contract: '<tr><th>업체 / 소속(원문)</th><th>구분</th><th>계약상태</th><th>대표자</th><th>연락처</th><th>위탁판매</th><th>개인정보</th><th>보증보험</th><th>계약 비고</th><th></th></tr>'
+  // 표 컬럼 정의 — label: 표시명 / k: 정렬 키(없으면 정렬 불가)
+  var COLUMNS = {
+    base: [
+      { k: '업체명', label: '업체 / 소속(원문)' }, { k: '업체구분', label: '구분' },
+      { k: '대표자', label: '대표자' }, { k: '연락처', label: '연락처' },
+      { k: '전달마커', label: '마커' }, { k: '웹접수', label: '웹접수' }, { k: '웹회신', label: '웹회신' },
+      { k: '소통채널', label: '소통채널' }, { k: '상태', label: '상태' }, { k: '비고', label: '비고' },
+      { k: '', label: '' }
+    ],
+    invoice: [
+      { k: '기호', label: '기호' }, { k: '업체명', label: '업체 / 소속(원문)' }, { k: '업체구분', label: '구분' },
+      { k: '법인', label: '법인' }, { k: '계산서형태', label: '계산서형태' }, { k: '수신방법', label: '수신방법' },
+      { k: '사업자등록증', label: '사업자' }, { k: '계산서비고', label: '계산서 비고' }, { k: '', label: '' }
+    ],
+    contract: [
+      { k: '업체명', label: '업체 / 소속(원문)' }, { k: '업체구분', label: '구분' },
+      { k: '계약상태', label: '계약상태' }, { k: '대표자', label: '대표자' }, { k: '연락처', label: '연락처' },
+      { k: '위탁판매', label: '위탁판매' }, { k: '개인정보', label: '개인정보' }, { k: '보증보험', label: '보증보험' },
+      { k: '계약비고', label: '계약 비고' }, { k: '', label: '' }
+    ]
   };
   var VIEW_COLS = { base: 11, invoice: 9, contract: 10 };
-  var CON_CHIP = { 완료: 'status-활성', 진행중: 'g-자점', 미진행: 'g-판매점', 만료: 'status-보류', 제외: 'm-X', 정보없음: 'i-기타' };
+
+  function buildThead() {
+    return '<tr>' + COLUMNS[VIEW].map(function (col) {
+      if (!col.k) return '<th></th>';
+      var arrow = SORT.key === col.k ? (SORT.dir > 0 ? ' ▲' : ' ▼') : '';
+      return '<th class="sortable" data-sort="' + esc(col.k) + '">' + esc(col.label) + arrow + '</th>';
+    }).join('') + '</tr>';
+  }
+  function sortValue(c, key) {
+    if (key === '계약상태') return conState(c);
+    var v = c[key];
+    return v === undefined || v === null ? '' : String(v);
+  }
+
+  var CON_CHIP = { 확인필요: 'warn', 완료: 'status-활성', 진행중: 'g-자점', 미진행: 'g-판매점', 만료: 'status-보류', 제외: 'm-X', 정보없음: 'i-기타' };
 
   function nameCell(c) {
-    return '<td class="name-cell">' + esc(c.업체명) + (c.인센티브 === 'Y' ? ' <span class="chip inc">인센</span>' : '') +
+    return '<td class="name-cell">' + esc(c.업체명) +
+      (isNewCompany(c) ? ' <span class="chip new">NEW</span>' : '') +
+      (c.인센티브 === 'Y' ? ' <span class="chip inc">인센</span>' : '') +
       '<span class="raw">' + esc(c.소속원문) + '</span></td>' +
       '<td><span class="chip g-' + esc(c.업체구분) + '">' + esc(c.업체구분) + '</span></td>';
   }
@@ -439,14 +507,29 @@
   }
 
   function renderTable() {
-    var rows = STATE.view;
-    if (VIEW === 'invoice') { // 기호별로 묶어서 표시
-      rows = rows.slice().sort(function (a, b) {
-        var s = String(a.기호 || '').localeCompare(String(b.기호 || ''), 'ko');
-        return s !== 0 ? s : String(a.업체명 || '').localeCompare(String(b.업체명 || ''), 'ko');
+    var rows = STATE.view.slice();
+    if (SORT.key) {
+      rows.sort(function (a, b) {
+        var r = sortValue(a, SORT.key).localeCompare(sortValue(b, SORT.key), 'ko', { numeric: true });
+        return r * SORT.dir;
+      });
+    } else if (VIEW === 'invoice') {   // 기본 정렬: 기호별로 묶기
+      rows.sort(function (a, b) {
+        var r = String(a.기호 || '').localeCompare(String(b.기호 || ''), 'ko');
+        return r !== 0 ? r : String(a.업체명 || '').localeCompare(String(b.업체명 || ''), 'ko');
       });
     }
-    $('#thead').innerHTML = THEADS[VIEW];
+    // 신규 업체는 항상 맨 위로 (일주일 지나면 자동으로 사라짐)
+    rows.sort(function (a, b) { return (isNewCompany(b) ? 1 : 0) - (isNewCompany(a) ? 1 : 0); });
+
+    $('#thead').innerHTML = buildThead();
+    $$('#thead .sortable').forEach(function (th) {
+      th.onclick = function () {
+        var k = th.getAttribute('data-sort');
+        if (SORT.key === k) SORT.dir = -SORT.dir; else { SORT.key = k; SORT.dir = 1; }
+        renderTable();
+      };
+    });
     $('#count').textContent = rows.length + ' / ' + STATE.all.length + ' 업체';
     if (!rows.length) { $('#tbody').innerHTML = '<tr><td colspan="' + VIEW_COLS[VIEW] + '" class="empty">조건에 맞는 업체가 없습니다.</td></tr>'; return; }
     var renderRow = VIEW === 'invoice' ? rowInvoice : (VIEW === 'contract' ? rowContract : rowBase);
@@ -623,7 +706,7 @@
   }
 
   /* ============ 개통리스트 업로드 → 신규 등록 + 기호/소속 현행화 ============ */
-  var UP = { grid: [], headerRow: -1, colIdx: -1, markerCol: -1, candidates: [], changes: [] };
+  var UP = { grid: [], headerRow: -1, colIdx: -1, markerCol: -1, candidates: [], changes: [], touched: [] };
 
   // 중복 비교용 키: 숫자접두/기호/마커괄호/공백 제거 + 소문자
   function normKey(s) {
@@ -636,7 +719,7 @@
   }
 
   function openUpload() {
-    UP = { grid: [], headerRow: -1, colIdx: -1, markerCol: -1, candidates: [], changes: [] };
+    UP = { grid: [], headerRow: -1, colIdx: -1, markerCol: -1, candidates: [], changes: [], touched: [] };
     $('#upFile').value = '';
     $('#upColWrap').style.display = 'none';
     $('#upSummary').style.display = 'none';
@@ -797,6 +880,7 @@
       if (k2 && !byKey[k2]) byKey[k2] = x;
     });
     var seen = {}, cands = [], changes = [], same = 0, total = 0, own = 0;
+    var touched = [];   // 이번 개통리스트에 등장한 기존 업체 (개통일 기록용)
     for (var r = UP.headerRow + 1; r < UP.grid.length; r++) {
       var raw = String((UP.grid[r] || [])[UP.colIdx] || '').trim();
       if (!raw) continue;
@@ -810,6 +894,7 @@
       if (!mk) mk = markerFromName(raw);
       var ex = byKey[key];
       if (ex) {
+        touched.push(ex.id);
         // 기호/소속이 달라졌거나, 휴면 업체에 개통건 발생(→활성 전환) → 현행화 후보
         var soanChanged = String(ex.소속원문 || '').trim() !== raw;
         var wake = ex.상태 === '휴면';
@@ -834,8 +919,11 @@
     }
     UP.candidates = cands;
     UP.changes = changes;
+    UP.touched = touched;
     $('#upSummary').style.display = '';
-    $('#upSummary').innerHTML = '리스트 <b>' + total + '건</b> → 🆕 신규 <b>' + cands.length + '개</b> · 🔄 기호/소속 변경 <b>' + changes.length + '개</b> · 기존과 동일 <b>' + same + '건</b>' + (own ? ' · 자점 제외 <b>' + own + '건</b>' : '');
+    $('#upSummary').innerHTML = '리스트 <b>' + total + '건</b> → 🆕 신규 <b>' + cands.length + '개</b> · 🔄 변경 <b>' + changes.length + '개</b> · 기존과 동일 <b>' + same + '건</b>'
+      + (own ? ' · 자점 제외 <b>' + own + '건</b>' : '')
+      + '<br><span style="color:var(--muted)">적용하면 이 리스트에 등장한 <b>' + touched.length + '개</b> 업체에 <b>이번주 개통</b> 기록이 남습니다 — 계약 미완료 업체는 계약 탭에서 <b>⚠️ 확인필요</b>로 모입니다.</span>';
     renderUploadTable();
     renderChangeTable();
   }
@@ -899,17 +987,20 @@
   function updateUpSave() {
     var n = UP.candidates.filter(function (c) { return c.checked; }).length;
     var m = UP.changes.filter(function (c) { return c.checked; }).length;
-    $('#upSave').disabled = (n + m) === 0;
+    var t = UP.touched.length;
+    $('#upSave').disabled = (n + m + t) === 0;
     var parts = [];
-    if (n) parts.push('신규 ' + n + '개 등록');
-    if (m) parts.push('변경 ' + m + '개 적용');
-    $('#upSave').textContent = parts.length ? parts.join(' · ') : '선택 항목 적용';
+    if (n) parts.push('신규 ' + n + '개');
+    if (m) parts.push('변경 ' + m + '개');
+    if (t) parts.push('개통기록 ' + t + '개');
+    $('#upSave').textContent = parts.length ? parts.join(' · ') + ' 적용' : '선택 항목 적용';
   }
 
   function saveUpload() {
     var picked = UP.candidates.filter(function (c) { return c.checked; });
     var pickedChg = UP.changes.filter(function (c) { return c.checked; });
-    if (!picked.length && !pickedChg.length) return;
+    if (!picked.length && !pickedChg.length && !UP.touched.length) return;
+    var today = new Date().toISOString().slice(0, 10);
     if (!LIVE) { toast('데모 모드에서는 등록할 수 없습니다', 'err'); return; }
 
     var companies = picked.map(function (p) {
@@ -922,7 +1013,7 @@
         소속원문: soan, 업체명: p.업체명, 기호: leadSymbol(soan), 업체구분: g,
         인센티브: isIncentive(soan) ? 'Y' : 'N', 전달마커: mk,
         소통채널: d.소통채널, 웹접수: d.웹접수, 웹회신: d.웹회신,
-        상태: '활성', 출처: '개통리스트'
+        상태: '활성', 출처: '개통리스트', 최근개통일: today
       };
     });
     // 현행화: 소속/기호/구분/인센티브/마커만 갱신 (계산서·계약 값은 유지)
@@ -943,7 +1034,14 @@
         }
       }
       if (c.wake) u.상태 = '활성';
+      u.최근개통일 = today;
       return u;
+    });
+    // 변경이 없는 업체도 "이번주 개통" 사실은 기록한다 (계약 확인필요 판정 근거)
+    var chgIds = {};
+    updates.forEach(function (u) { chgIds[String(u.id)] = 1; });
+    UP.touched.forEach(function (id) {
+      if (!chgIds[String(id)]) updates.push({ id: id, 최근개통일: today });
     });
 
     $('#upSave').disabled = true;
@@ -1004,6 +1102,7 @@
 
   function setView(v) {
     VIEW = v;
+    SORT = { key: '', dir: 1 };
     $$('.tab-btn').forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-view') === v); });
 
     // 특수 탭(정산변환·변경로그)은 목록 화면을 감춤
@@ -1016,7 +1115,7 @@
     $('#logWrap').style.display = isLog ? '' : 'none';
     if (settle) {
       var f = $('#settleFrame');
-      if (!f.getAttribute('src')) f.setAttribute('src', 'settle.html?v=20260815b');
+      if (!f.getAttribute('src')) f.setAttribute('src', 'settle.html?v=20260815c');
       return;
     }
     if (isLog) { loadLogs(); return; }

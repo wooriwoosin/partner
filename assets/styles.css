@@ -109,6 +109,11 @@ tbody tr:hover { background: rgba(37,99,235,.05); }
 .chip.status-보류 { background: rgba(255,176,32,.14); color: var(--amber); }
 .chip.status-휴면 { background: #eef1f5; color: #7b8794; }
 .chip.inc { background: rgba(155,140,255,.16); color: var(--own); }
+.chip.new { background: #dcfce7; color: #15803d; }
+.chip.warn { background: #fef3c7; color: #b45309; }
+.stat.warn .n { color: #d97706; }
+thead th.sortable { cursor: pointer; user-select: none; }
+thead th.sortable:hover { color: var(--accent); }
 .chip.i-정발행 { background: rgba(79,140,255,.16); color: var(--partner); }
 .chip.i-역발행 { background: rgba(240,136,62,.16); color: var(--sales); }
 .chip.i-원천세 { background: rgba(255,176,32,.16); color: var(--amber); }
