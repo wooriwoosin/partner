@@ -11,7 +11,7 @@
  */
 
 // 배포된 코드 버전 — 프론트가 이 값으로 "구버전 배포"를 감지해 경고를 띄웁니다.
-var CODE_VERSION = '2026-08-15a';
+var CODE_VERSION = '2026-08-15b';
 
 var SPREADSHEET_ID = '1shhA5RdXP7DiaMIyR33bTG2jFj4SFqumYflY0lF0pwc';
 var SHEET_NAME = '업체관리';
@@ -488,6 +488,145 @@ function 계정추가_직접(id, pw, name, role) {
 }
 
 function setup() { dataSheet_(); userSheet_(); return 'ok'; }
+
+/* ============================================================
+ * 일괄현행화 — 소속 원장(전체사원관리)으로 기호·마커를 한 번에 맞추기
+ * ------------------------------------------------------------
+ * 준비: 시트에 '현행화' 탭을 만들고 두 열을 붙여넣기
+ *        A열 = 소 속 (예: ★정석네트웍스○)
+ *        B열 = 사원명 (예: (X)정석네트웍스)   ← 마커용, 없으면 비워도 됨
+ *
+ *   1) 일괄현행화_미리보기()  → '현행화리포트' 탭에 바뀔 내용만 정리 (시트 변경 없음)
+ *   2) 확인 후 일괄현행화_적용()
+ *
+ * 안전장치
+ *   - 새 업체를 만들지 않는다 (매칭 안 되면 리포트에만 남김)
+ *   - 상태(활성/휴면)를 절대 건드리지 않는다
+ *   - 계산서·계약 정보를 건드리지 않는다
+ *   - 바꾸는 값: 소속원문 · 기호 · 업체구분 · 인센티브 · 전달마커 · 웹접수 · 웹회신
+ * ============================================================ */
+var SYNC_SHEET = '현행화';
+var SYNC_REPORT = '현행화리포트';
+
+function 일괄현행화_미리보기() { return 일괄현행화_(false); }
+function 일괄현행화_적용()   { return 일괄현행화_(true); }
+
+// 이름 변형 (괄호 부가설명 차이 흡수)
+function nameVariants_(s) {
+  var base = normName_(s);
+  if (!base) return [];
+  var out = [base];
+  var noParen = base.replace(/[\(（][^)）]*[\)）]/g, '');
+  if (noParen && out.indexOf(noParen) < 0) out.push(noParen);
+  var head = base.split(/[\(（]/)[0];
+  if (head && out.indexOf(head) < 0) out.push(head);
+  return out;
+}
+function markerOf_(s) {
+  var m = String(s || '').match(/[\(（]\s*([oO○ＯxX×？?])\s*[\)）]/);
+  if (!m) return '';
+  var map = { o: 'O', O: 'O', '○': 'O', 'Ｏ': 'O', x: 'X', X: 'X', '×': 'X', '?': '?', '？': '?' };
+  return map[m[1]] || '';
+}
+function classifyOf_(s) {
+  s = String(s || '');
+  if (s.charAt(0) === '●' || /^\d+\./.test(s)) return '자점';
+  if (/^[■□]/.test(s)) return '판매점';
+  if (/^[★☆◆◇]/.test(s)) return '협력점';
+  return '';
+}
+
+function 일괄현행화_(apply) {
+  var ss = ss_();
+  var src = ss.getSheetByName(SYNC_SHEET);
+  if (!src) throw new Error("'" + SYNC_SHEET + "' 탭이 없습니다. A열=소속, B열=사원명 을 붙여넣고 다시 실행하세요.");
+  var last = src.getLastRow();
+  if (last < 1) throw new Error("'" + SYNC_SHEET + "' 탭이 비어 있습니다.");
+  var vals = src.getRange(1, 1, last, 2).getValues();
+
+  // 같은 소속이 여러 줄(사원 여러 명)일 수 있으므로 마커를 모은다
+  var order = [], rawBy = {}, mkBy = {};
+  vals.forEach(function (r) {
+    var raw = String(r[0] || '').trim();
+    if (!raw) return;
+    if (/^소\s*속$/.test(raw)) return;                 // 머리글 줄 건너뜀
+    var k = normName_(raw);
+    if (!k) return;
+    if (!rawBy[k]) { rawBy[k] = raw; order.push(k); }
+    if (!mkBy[k]) { var m = markerOf_(r[1]); if (m) mkBy[k] = m; }
+  });
+
+  var rows = readAll_();
+  var byKey = {};
+  rows.forEach(function (r) {
+    nameVariants_(r['업체명']).concat(nameVariants_(r['소속원문'])).forEach(function (k) {
+      if (k && !byKey[k]) byKey[k] = r;
+    });
+  });
+
+  var report = [['유형', '시트 업체명', '기존 소속', '새 소속', '바뀌는 내용']];
+  var changed = 0, same = 0, notFound = 0, own = 0;
+
+  order.forEach(function (k) {
+    var raw = rawBy[k];
+    var g = classifyOf_(raw);
+    if (g === '자점') { own++; return; }               // 자점 줄은 건드리지 않음
+
+    var ex = null, vs = nameVariants_(raw);
+    for (var i = 0; i < vs.length && !ex; i++) ex = byKey[vs[i]] || null;
+    if (!ex) { notFound++; report.push(['매칭없음', '', '', raw, '시트에 없는 업체 — 아무 것도 하지 않음']); return; }
+
+    // 판매점은 (X) 표기가 없으면 (O)
+    var mk = mkBy[k] || (g === '판매점' ? 'O' : '');
+    var sym = (String(raw).match(/^([■□★☆◆◇]+)/) || ['', ''])[1];
+    var inc = /^[◆◇]/.test(raw) ? 'Y' : 'N';
+    var web = (mk === 'X') ? 'Y' : 'N';                // X=직접 웹처리 Y/Y · 그 외 N/N
+
+    var diffs = [];
+    if (String(ex['소속원문'] || '').trim() !== raw) diffs.push('소속 ' + (ex['소속원문'] || '(없음)') + '→' + raw);
+    if (String(ex['기호'] || '') !== sym) diffs.push('기호 ' + (ex['기호'] || '없음') + '→' + (sym || '없음'));
+    if (String(ex['업체구분'] || '') !== g) diffs.push('구분 ' + (ex['업체구분'] || '?') + '→' + g);
+    if (String(ex['인센티브'] || '') !== inc) diffs.push('인센티브 ' + (ex['인센티브'] || '') + '→' + inc);
+    if (String(ex['전달마커'] || '') !== mk) diffs.push('마커 ' + (ex['전달마커'] || '없음') + '→' + (mk || '없음'));
+    if (String(ex['웹접수'] || '') !== web) diffs.push('웹접수 ' + (ex['웹접수'] || '') + '→' + web);
+    if (String(ex['웹회신'] || '') !== web) diffs.push('웹회신 ' + (ex['웹회신'] || '') + '→' + web);
+
+    if (!diffs.length) { same++; return; }
+    changed++;
+    report.push(['변경', ex['업체명'], ex['소속원문'], raw, diffs.join(' | ')]);
+
+    if (apply) {
+      ex['소속원문'] = raw; ex['기호'] = sym; ex['업체구분'] = g;
+      ex['인센티브'] = inc; ex['전달마커'] = mk;
+      ex['웹접수'] = web; ex['웹회신'] = web;
+      ex['수정일시'] = new Date();
+      // 상태·계산서·계약은 건드리지 않음
+    }
+  });
+
+  if (apply && changed) {
+    var sh = dataSheet_();
+    var hdr = sheetHeader_(sh);
+    var out = rows.map(function (r) { return rowFromObj_(r, hdr); });
+    sh.getRange(2, 1, out.length, hdr.length).setValues(out);
+    log_({ id: 'system', name: '일괄현행화' }, '일괄현행화', changed + '개 업체', '소속·기호·구분·마커·웹접수/웹회신 갱신');
+  }
+
+  var rep = ss.getSheetByName(SYNC_REPORT) || ss.insertSheet(SYNC_REPORT);
+  rep.clearContents();
+  var head = [[(apply ? '■ 적용 완료' : '■ 미리보기 (시트 변경 없음)') + ' · ' +
+    Utilities.formatDate(new Date(), LOG_TZ, 'yyyy-MM-dd HH:mm'), '', '', '', '']];
+  rep.getRange(1, 1, 1, 5).setValues(head);
+  rep.getRange(2, 1, report.length, 5).setValues(report);
+  rep.setFrozenRows(2);
+
+  var msg = (apply ? '적용 완료' : '미리보기 완료(변경 없음)') +
+    ' · 변경 대상 ' + changed + '개 · 이미 동일 ' + same + '개 · 시트에 없음 ' + notFound + '개 · 자점 건너뜀 ' + own + '개\n' +
+    "'" + SYNC_REPORT + "' 탭에서 상세 내역을 확인하세요." +
+    (apply ? '' : '\n확인 후 [일괄현행화_적용] 을 실행하면 반영됩니다.');
+  Logger.log(msg);
+  return msg;
+}
 
 /* ============================================================
  * 계약복구() — 위탁판매/개인정보 값 되살리기

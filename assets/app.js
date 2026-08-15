@@ -88,7 +88,7 @@
   }
 
   /* ============ 상태 ============ */
-  var STATE = { all: [], view: [], filter: { gubun: '', marker: '', web: '', dormant: '', inv: '', sym: '', con: '', q: '' } };
+  var STATE = { all: [], allRaw: [], view: [], filter: { gubun: '', marker: '', web: '', dormant: '', inv: '', sym: '', con: '', q: '' } };
   var VIEW = 'base'; // base | invoice | contract | settle
   var SORT = { key: '', dir: 1 };   // 표 헤더 클릭 정렬
   var EDITING = null; // 수정 중인 원본 레코드 (출처 등 폼에 없는 필드 보존용)
@@ -718,6 +718,20 @@
       .toLowerCase();
   }
 
+  // 같은 업체가 시트/파일에서 다르게 적힌 경우를 흡수한다.
+  //  예) 시트 "기가몬스터(에이블정보통신)" ↔ 파일 "기가몬스터"
+  //      시트 "폰찍좌 4호점(이티이브이)"   ↔ 파일 "폰찍좌4호점"
+  function nameVariants(s) {
+    var base = normKey(s);
+    if (!base) return [];
+    var out = [base];
+    var noParen = base.replace(/[\(（][^)）]*[\)）]/g, '');      // 괄호 부분 제거
+    if (noParen && out.indexOf(noParen) < 0) out.push(noParen);
+    var head = base.split(/[\(（]/)[0];                          // 괄호 앞부분만
+    if (head && out.indexOf(head) < 0) out.push(head);
+    return out;
+  }
+
   function openUpload() {
     UP = { grid: [], headerRow: -1, colIdx: -1, markerCol: -1, isOpeningList: false, candidates: [], changes: [], touched: [] };
     $('#upFile').value = '';
@@ -851,6 +865,19 @@
 
     detectKind();
 
+    // 이 화면은 개통리스트 전용 — 소속 원장 등 다른 파일은 받지 않는다
+    if (UP.colIdx >= 0 && !UP.isOpeningList) {
+      $('#upColWrap').style.display = 'none';
+      $('#upNewWrap').style.display = 'none';
+      $('#upChgWrap').style.display = 'none';
+      $('#upSave').disabled = true;
+      $('#upSummary').style.display = '';
+      $('#upSummary').innerHTML = '⛔ <b>개통리스트가 아닙니다.</b> 이 화면은 <b>개통리스트</b>(개통일·개통상태·협력점 열이 있는 파일)만 처리합니다.<br>' +
+        '<span style="color:var(--muted)">전체사원관리(소속 원장) 같은 파일로 기호·마커를 일괄 변경하려면 시트에서 <b>일괄현행화</b> 절차를 이용하세요. ' +
+        '여기서 올리면 실제 개통이 없는 업체가 신규로 등록되거나 휴면이 풀릴 수 있어 막아두었습니다.</span>';
+      return;
+    }
+
     // 선택 UI — 헤더가 깨져도 "실제 값 미리보기"로 고를 수 있게
     var opts = [];
     for (var c3 = 0; c3 < maxCols; c3++) {
@@ -902,11 +929,16 @@
   function buildCandidates() {
     if (UP.colIdx < 0) return;
     var byKey = {};
-    STATE.all.forEach(function (x) {
-      var k1 = normKey(x.업체명), k2 = normKey(x.소속원문);
-      if (k1 && !byKey[k1]) byKey[k1] = x;
-      if (k2 && !byKey[k2]) byKey[k2] = x;
+    (STATE.allRaw.length ? STATE.allRaw : STATE.all).forEach(function (x) {
+      nameVariants(x.업체명).concat(nameVariants(x.소속원문)).forEach(function (k) {
+        if (k && !byKey[k]) byKey[k] = x;
+      });
     });
+    function findExisting(raw) {
+      var vs = nameVariants(raw);
+      for (var i = 0; i < vs.length; i++) if (byKey[vs[i]]) return byKey[vs[i]];
+      return null;
+    }
     // 1차 스캔: 같은 소속이 여러 줄(사원 여러 명)일 수 있으므로 마커를 모아둔다
     var order = [], rawByKey = {}, mkByKey = {}, total = 0;
     for (var r0 = UP.headerRow + 1; r0 < UP.grid.length; r0++) {
@@ -931,12 +963,13 @@
       if (classify(raw) === '자점') { own++; continue; } // 자점은 등록/현행화 대상 아님
       // 마커: 표기가 없으면 판매점은 (O) 로 간주 (■□ 판매점은 대부분 표기 없음)
       var mk = defaultMarker(classify(raw), mkByKey[key] || '');
-      var ex = byKey[key];
+      var ex = findExisting(raw);
       if (ex) {
         touched.push(ex.id);
         // 기호/소속이 달라졌거나, 휴면 업체에 개통건 발생(→활성 전환) → 현행화 후보
         var soanChanged = String(ex.소속원문 || '').trim() !== raw;
-        var wake = ex.상태 === '휴면';
+        if (ex.업체구분 === '자점') soanChanged = true;   // 자점→판매/협력점 재분류도 '변경'
+        var wake = UP.isOpeningList && ex.상태 === '휴면';   // 개통 실적이 있을 때만 되살린다
         var mkChanged = !!mk && String(ex.전달마커 || '').trim() !== mk;
         if (soanChanged || wake || mkChanged) {
           var g2 = classify(raw);
@@ -963,9 +996,7 @@
     $('#upSummary').style.display = '';
     $('#upSummary').innerHTML = '리스트 <b>' + total + '건</b> → 🆕 신규 <b>' + cands.length + '개</b> · 🔄 변경 <b>' + changes.length + '개</b> · 기존과 동일 <b>' + same + '건</b>'
       + (own ? ' · 자점 제외 <b>' + own + '건</b>' : '')
-      + '<br><span style="color:var(--muted)">' + (UP.isOpeningList
-        ? '📅 개통리스트로 인식 — 적용하면 등장한 <b>' + touched.length + '개</b> 업체에 <b>이번주 개통</b> 기록이 남고, 계약 미완료 업체는 계약 탭 <b>⚠️ 확인필요</b>로 모입니다.'
-        : '👥 소속 원장(사원관리)으로 인식 — 기호·마커 현행화만 하고 개통 기록은 남기지 않습니다.') + '</span>';
+      + '<br><span style="color:var(--muted)">📅 적용하면 등장한 <b>' + touched.length + '개</b> 업체에 <b>이번주 개통</b> 기록이 남고, 계약 미완료 업체는 계약 탭 <b>⚠️ 확인필요</b>로 모입니다.</span>';
     renderUploadTable();
     renderChangeTable();
   }
@@ -1160,7 +1191,7 @@
     $('#logWrap').style.display = isLog ? '' : 'none';
     if (settle) {
       var f = $('#settleFrame');
-      if (!f.getAttribute('src')) f.setAttribute('src', 'settle.html?v=20260815e');
+      if (!f.getAttribute('src')) f.setAttribute('src', 'settle.html?v=20260815f');
       return;
     }
     if (isLog) { loadLogs(); return; }
@@ -1180,8 +1211,9 @@
   function load() {
     $('#tbody').innerHTML = '<tr><td colspan="' + VIEW_COLS[VIEW] + '" class="empty"><span class="spin"></span> 불러오는 중…</td></tr>';
     return apiList().then(function (list) {
+      STATE.allRaw = list.slice();   // 자점 포함 — 업로드 매칭은 이 전체를 기준으로 한다
       STATE.all = list.filter(function (c) {
-        return c.업체구분 !== '자점'; // 자점은 앱에서 다루지 않음
+        return c.업체구분 !== '자점'; // 자점은 화면에서 다루지 않음
       }).map(function (c) {
         c.계정수 = c.계정수 === '' ? '' : (Number(c.계정수) || c.계정수);
         // 구버전 서버(컬럼명 변경 전) 호환: 옛 이름으로 온 값을 새 이름으로 이어받음
