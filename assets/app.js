@@ -740,27 +740,46 @@
     return '';
   }
 
+  // HTML 표(확장자만 xls 인 웹 다운로드본)는 브라우저 파서로 직접 읽는다.
+  // 엑셀 라이브러리는 CSS가 길면 HTML 인지 못 알아채고 엉뚱하게 파싱하는 경우가 있음.
+  function gridFromHtml(text) {
+    var doc = new DOMParser().parseFromString(text, 'text/html');
+    var tables = Array.prototype.slice.call(doc.querySelectorAll('table'));
+    if (!tables.length) return null;
+    tables.sort(function (a, b) { return b.rows.length - a.rows.length; });  // 행이 가장 많은 표 = 데이터
+    var tb = tables[0], out = [];
+    for (var i = 0; i < tb.rows.length; i++) {
+      var cells = tb.rows[i].cells, arr = [];
+      for (var j = 0; j < cells.length; j++) {
+        arr.push(String(cells[j].textContent || '').replace(/\u00a0/g, ' ').trim());
+      }
+      out.push(arr);
+    }
+    return out;
+  }
+
   function handleUploadFile(file) {
     if (!file) return;
-    if (typeof XLSX === 'undefined') { toast('엑셀 라이브러리 로드 실패 — 인터넷 연결을 확인하세요', 'err'); return; }
     var reader = new FileReader();
     reader.onload = function (e) {
       try {
         var buf = e.target.result;
         var bytes = new Uint8Array(buf);
         var head = '';
-        for (var i = 0; i < Math.min(bytes.length, 300); i++) head += String.fromCharCode(bytes[i]);
-        var wb;
-        if (/<\s*(table|html|meta|body)/i.test(head)) {
-          // 확장자만 xls 인 HTML 표 (웹 시스템 다운로드본) — 인코딩 판별 후 파싱
-          wb = XLSX.read(decodeKo(buf), { type: 'string' });
-        } else {
-          // 구형 xls 는 한글 코드페이지(949) 지정해야 안 깨짐
-          wb = XLSX.read(bytes, { type: 'array', codepage: 949 });
+        for (var i = 0; i < Math.min(bytes.length, 4000); i++) head += String.fromCharCode(bytes[i]);
+        var grid = null;
+
+        if (/<\s*(table|html|meta|body|style)/i.test(head)) {
+          grid = gridFromHtml(decodeKo(buf));      // HTML 표
         }
-        var ws = wb.Sheets[wb.SheetNames[0]];
-        UP.grid = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
-        if (!UP.grid.length) { toast('파일에서 데이터를 찾지 못했습니다', 'err'); return; }
+        if (!grid || !grid.length) {
+          if (typeof XLSX === 'undefined') { toast('엑셀 라이브러리 로드 실패 — 인터넷 연결을 확인하세요', 'err'); return; }
+          var wb = XLSX.read(bytes, { type: 'array', codepage: 949 });   // 진짜 엑셀 (한글 코드페이지)
+          var ws = wb.Sheets[wb.SheetNames[0]];
+          grid = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+        }
+        if (!grid || !grid.length) { toast('파일에서 데이터를 찾지 못했습니다', 'err'); return; }
+        UP.grid = grid;
         detectColumn();
       } catch (err) { toast('파일을 읽지 못했습니다: ' + err.message, 'err'); }
     };
@@ -1141,7 +1160,7 @@
     $('#logWrap').style.display = isLog ? '' : 'none';
     if (settle) {
       var f = $('#settleFrame');
-      if (!f.getAttribute('src')) f.setAttribute('src', 'settle.html?v=20260815d');
+      if (!f.getAttribute('src')) f.setAttribute('src', 'settle.html?v=20260815e');
       return;
     }
     if (isLog) { loadLogs(); return; }
