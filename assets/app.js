@@ -299,22 +299,25 @@
     if (c.계약제외 === 'Y') return '제외';
     if (c.위탁판매 === 'Y' && c.개인정보 === 'Y') return '완료';
     if (c.위탁판매 === 'Y' || c.개인정보 === 'Y') return '진행중';
-    // 계약이 안 된 업체(미진행·만료·정보없음)인데 이번 주 개통 실적이 있으면 → 확인필요
-    var base = !c.위탁판매 ? '정보없음'
-      : ((c.계약비고 || '').indexOf('만료') >= 0 ? '만료' : '미진행');
-    return openedThisWeek(c) ? '확인필요' : base;
+    // 서명 전이지만 이번 주 개통이 있으면 → 확인필요 (계약서를 보냈어도 서명은 받아야 함)
+    if (openedThisWeek(c)) return '확인필요';
+    if (c.계약서발송 === 'Y') return '발송대기';   // 보냈고 서명 기다리는 중
+    if (!c.위탁판매) return '정보없음';
+    return (c.계약비고 || '').indexOf('만료') >= 0 ? '만료' : '미진행';
   }
 
   // 계약상태는 저장되는 값이 아니라 아래 항목들로 자동 판정됩니다.
   var CON_RULE = '계약제외 Y → <b>제외</b> · 위탁판매 빈칸 → <b>정보없음</b> · 위탁판매 Y +\u200b 개인정보 Y → <b>완료</b>'
-    + ' · 계약비고에 "만료" 포함 → <b>만료</b> · 둘 중 하나만 Y → <b>진행중</b> · 그 외 → <b>미진행</b>'
+    + ' · 둘 중 하나만 Y → <b>진행중</b> · 이번주 개통 있고 서명 전 → <b>확인필요</b> · 계약서발송 Y → <b>발송대기</b> · 계약비고에 "만료" 포함 → <b>만료</b> · 그 외 → <b>미진행</b>'
     + '<br><span style="color:var(--muted)">※ 보증보험은 일부 업체만 진행하므로 계약상태에 영향을 주지 않습니다.</span>';
   function renderConState() {
     var box = document.getElementById('conStateBox');
     if (!box) return;
     var cur = {
       위탁판매: $('#f_wt').value, 개인정보: $('#f_pi').value,
-      계약제외: $('#f_cexc').value, 계약비고: $('#f_connote').value
+      계약제외: $('#f_cexc').value, 계약비고: $('#f_connote').value,
+      계약서발송: $('#f_sent').value,
+      최근개통일: EDITING ? EDITING.최근개통일 : ''
     };
     var st = conState(cur);
     box.innerHTML = '현재 계약상태 <span class="chip ' + (CON_CHIP[st] || '') + '" style="font-size:12px">' + st + '</span>'
@@ -360,13 +363,14 @@
         statCard('hold', 'inv:__none', noInv, '계산서정보 없음/기타')
       ];
     } else if (VIEW === 'contract') {
-      var cs = { 완료: 0, 진행중: 0, 미진행: 0, 만료: 0, 제외: 0, 정보없음: 0, 확인필요: 0 };
+      var cs = { 완료: 0, 진행중: 0, 미진행: 0, 만료: 0, 제외: 0, 정보없음: 0, 확인필요: 0, 발송대기: 0 };
       baseRows().forEach(function (c) { cs[conState(c)]++; });
       cards = [
         statCard('', 'total', s.total, '전체 업체'),
         statCard('warn', 'con:확인필요', cs.확인필요, '⚠️ 확인필요(이번주 개통)'),
         statCard('partner', 'con:완료', cs.완료, '계약완료'),
         statCard('own', 'con:진행중', cs.진행중, '진행중'),
+        statCard('own', 'con:발송대기', cs.발송대기, '발송함(서명대기)'),
         statCard('sales', 'con:미진행', cs.미진행, '미진행'),
         statCard('hold', 'con:만료', cs.만료, '만료'),
         statCard('hold', 'con:제외', cs.제외, '제외'),
@@ -443,11 +447,12 @@
     contract: [
       { k: '업체명', label: '업체 / 소속(원문)' }, { k: '업체구분', label: '구분' },
       { k: '계약상태', label: '계약상태' }, { k: '대표자', label: '대표자' }, { k: '연락처', label: '연락처' },
+      { k: '계약서발송', label: '발송' },
       { k: '위탁판매', label: '위탁판매' }, { k: '개인정보', label: '개인정보' }, { k: '보증보험', label: '보증보험' },
       { k: '계약비고', label: '계약 비고' }, { k: '', label: '' }
     ]
   };
-  var VIEW_COLS = { base: 11, invoice: 9, contract: 10 };
+  var VIEW_COLS = { base: 11, invoice: 9, contract: 11 };
 
   function buildThead() {
     return '<tr>' + COLUMNS[VIEW].map(function (col) {
@@ -462,7 +467,7 @@
     return v === undefined || v === null ? '' : String(v);
   }
 
-  var CON_CHIP = { 확인필요: 'warn', 완료: 'status-활성', 진행중: 'g-자점', 미진행: 'g-판매점', 만료: 'status-보류', 제외: 'm-X', 정보없음: 'i-기타' };
+  var CON_CHIP = { 확인필요: 'warn', 발송대기: 'g-자점', 완료: 'status-활성', 진행중: 'g-자점', 미진행: 'g-판매점', 만료: 'status-보류', 제외: 'm-X', 정보없음: 'i-기타' };
 
   function nameCell(c) {
     return '<td class="name-cell">' + esc(c.업체명) +
@@ -501,6 +506,7 @@
       '<td><span class="chip ' + (CON_CHIP[st] || '') + '">' + st + '</span></td>' +
       '<td>' + esc(c.대표자 || '') + '</td>' +
       '<td>' + esc(c.연락처 || '') + '</td>' +
+      '<td style="text-align:center">' + yn(c.계약서발송) + '</td>' +
       '<td style="text-align:center">' + yn(c.위탁판매) + '</td>' +
       '<td style="text-align:center">' + yn(c.개인정보) + '</td>' +
       '<td style="text-align:center">' + yn(c.보증보험) + '</td>' +
@@ -546,7 +552,7 @@
   /* ============ 모달 ============ */
   function blankCompany() {
     return { id: '', 소속원문: '', 업체명: '', 기호: '', 업체구분: '', 인센티브: 'N', 전달마커: '', 소통채널: '', 웹접수: '', 웹회신: '', 계정수: '', 연락처: '', 상태: '활성', 비고: '',
-      법인: '', 대표자: '', 계산서형태: '', 수신방법: '', 계산서비고: '', 위탁판매: '', 개인정보: '', 보증보험: '', 사업자등록증: '', 계약제외: '', 계약비고: '', 출처: '' };
+      법인: '', 대표자: '', 계산서형태: '', 수신방법: '', 계산서비고: '', 위탁판매: '', 개인정보: '', 보증보험: '', 사업자등록증: '', 계약제외: '', 계약비고: '', 계약서발송: '', 출처: '' };
   }
   var SECTION_TITLES = { base: '기본 정보 수정', invoice: '계산서 수정', contract: '계약서·보증보험 수정' };
   function openModal(id) {
@@ -576,6 +582,7 @@
     $('#f_invhow').value = c.수신방법 || '';
     $('#f_bizdoc').value = c.사업자등록증 || '';
     $('#f_invnote').value = c.계산서비고 || '';
+    $('#f_sent').value = c.계약서발송 || '';
     $('#f_wt').value = c.위탁판매 || '';
     $('#f_pi').value = c.개인정보 || '';
     $('#f_ins').value = c.보증보험 || '';
@@ -639,6 +646,7 @@
     c.계산서형태 = $('#f_inv').value;
     c.수신방법 = $('#f_invhow').value.trim();
     c.계산서비고 = $('#f_invnote').value.trim();
+    c.계약서발송 = $('#f_sent').value;
     c.위탁판매 = $('#f_wt').value;
     c.개인정보 = $('#f_pi').value;
     c.보증보험 = $('#f_ins').value;
@@ -1267,7 +1275,7 @@
     $('#logWrap').style.display = isLog ? '' : 'none';
     if (settle) {
       var f = $('#settleFrame');
-      if (!f.getAttribute('src')) f.setAttribute('src', 'settle.html?v=20260815j');
+      if (!f.getAttribute('src')) f.setAttribute('src', 'settle.html?v=20260815k');
       return;
     }
     if (isLog) { loadLogs(); return; }
@@ -1357,7 +1365,7 @@
     $('#deleteBtn').addEventListener('click', deleteCompany);
     $('#f_soan').addEventListener('blur', autofillFromSoan);
     $('#autofillBtn').addEventListener('click', autofillFromSoan);
-    ['#f_wt', '#f_pi', '#f_cexc'].forEach(function (sel) {
+    ['#f_wt', '#f_pi', '#f_cexc', '#f_sent'].forEach(function (sel) {
       $(sel).addEventListener('change', renderConState);
     });
     $('#f_connote').addEventListener('input', renderConState);

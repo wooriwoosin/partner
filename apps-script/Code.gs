@@ -11,7 +11,7 @@
  */
 
 // 배포된 코드 버전 — 프론트가 이 값으로 "구버전 배포"를 감지해 경고를 띄웁니다.
-var CODE_VERSION = '2026-08-15e';
+var CODE_VERSION = '2026-08-15f';
 
 var SPREADSHEET_ID = '1shhA5RdXP7DiaMIyR33bTG2jFj4SFqumYflY0lF0pwc';
 var SHEET_NAME = '업체관리';
@@ -37,7 +37,9 @@ var HEADERS = [
   // [계약] — 앱: 📝 계약서·보증보험 탭
   '위탁판매', '개인정보', '보증보험', '계약제외', '계약비고',
   // [관리]
-  '출처', '등록일', '최근개통일', '수정일시'
+  '출처', '등록일', '최근개통일', '수정일시',
+  // ▼ 추가 확장 (2026-08: 계약서 발송 여부) — 새 컬럼은 항상 맨 뒤에 붙인다
+  '계약서발송'
 ];
 
 // 이름이 바뀐 컬럼 (새 이름 → 옛 이름). 시트정리 시 옛 이름 값을 새 이름으로 이어받는다.
@@ -90,6 +92,8 @@ function dataSheet_() {
 function autoRepairHeader_(sh) {
   var last = sh.getLastRow();
   if (last < 2) return false;
+  // 열 개수가 HEADERS 와 다르면 데이터가 어느 순서인지 단정할 수 없으므로 손대지 않는다
+  if (sh.getLastColumn() !== HEADERS.length) return false;
   // 새 순서라면 8번째 열은 '상태'(활성/휴면), 옛 순서라면 '소통채널'(카카오톡…/어드민)
   var probe = sh.getRange(2, 8, Math.min(30, last - 1), 1).getValues();
   var newHits = 0, oldHits = 0;

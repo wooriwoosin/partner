@@ -7,7 +7,7 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%234f8cff'/%3E%3Ctext x='16' y='22' font-size='18' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='bold'%3E協%3C/text%3E%3C/svg%3E" />
   <link rel="preconnect" href="https://cdn.jsdelivr.net" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
-  <link rel="stylesheet" href="assets/styles.css?v=20260815j" />
+  <link rel="stylesheet" href="assets/styles.css?v=20260815k" />
 </head>
 <body>
   <div id="authScreen" class="auth-screen">
@@ -80,6 +80,7 @@
         <option value="확인필요">⚠️ 확인필요 (이번주 개통)</option>
         <option value="완료">계약완료</option>
         <option value="진행중">진행중(일부 서명)</option>
+        <option value="발송대기">발송함(서명 대기)</option>
         <option value="미진행">미진행</option>
         <option value="만료">만료</option>
         <option value="제외">제외</option>
@@ -213,6 +214,10 @@
         <div id="secContract" style="display:none">
           <div class="grid2">
             <div id="conStateBox" class="preview-box" style="grid-column:1/-1"></div>
+            <div class="field">
+              <label>계약서발송</label>
+              <select id="f_sent"><option value="">-</option><option value="Y">Y — 발송함</option><option value="N">N</option></select>
+            </div>
             <div class="field"><label>위탁판매 계약서</label><select id="f_wt"><option value="">-</option><option value="Y">Y</option><option value="N">N</option></select></div>
             <div class="field"><label>개인정보 계약서</label><select id="f_pi"><option value="">-</option><option value="Y">Y</option><option value="N">N</option></select></div>
             <div class="field"><label>보증보험</label><select id="f_ins"><option value="">-</option><option value="Y">Y</option><option value="N">N</option></select></div>
@@ -327,7 +332,7 @@
   <div id="toast"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  <script src="assets/config.js?v=20260815j"></script>
-  <script src="assets/app.js?v=20260815j"></script>
+  <script src="assets/config.js?v=20260815k"></script>
+  <script src="assets/app.js?v=20260815k"></script>
 </body>
 </html>
