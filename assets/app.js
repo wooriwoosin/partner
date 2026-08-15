@@ -741,6 +741,16 @@
     if (noParen && out.indexOf(noParen) < 0) out.push(noParen);
     var head = base.split(/[\(（]/)[0];                          // 괄호 앞부분만
     if (head && out.indexOf(head) < 0) out.push(head);
+    var inner = base.match(/[\(（]([^)）]+)[\)）]/);              // 괄호 안 내용 (지점명)
+    if (inner && inner[1] && out.indexOf(inner[1]) < 0) out.push(inner[1]);
+    return out;
+  }
+
+  // 유치자에 붙는 꼬리표를 뗀 후보들 (예: 홍성휴대폰멀티샵_HM → 홍성휴대폰멀티샵)
+  function branchCandidates(b) {
+    var out = [b];
+    var m = String(b).match(/^(.*?)_[^_]{1,6}$/);
+    if (m && m[1] && out.indexOf(m[1]) < 0) out.push(m[1]);
     return out;
   }
 
@@ -971,17 +981,44 @@
       return amb ? 'AMBIGUOUS' : null;
     }
     // 1차 스캔: 같은 소속이 여러 줄(사원 여러 명)일 수 있으므로 마커를 모아둔다
-    var order = [], rawByKey = {}, mkByKey = {}, total = 0;
+    // 지점형 업체는 소속이 한 이름(예: ■■옆커폰○)이고 실제 지점은 유치자 열에 들어온다.
+    //   협력점=■■옆커폰○ · 유치자=서초점_옆커폰  →  시트의 '서초점_옆커폰' 행에 매칭
+    // 따라서 (소속, 유치자) 조합을 하나의 단위로 본다.
+    var order = [], rawByKey = {}, mkByKey = {}, branchByKey = {}, total = 0;
     for (var r0 = UP.headerRow + 1; r0 < UP.grid.length; r0++) {
       var raw0 = String((UP.grid[r0] || [])[UP.colIdx] || '').trim();
       if (!raw0) continue;
       total++;
-      var k0 = normKey(raw0);
+      var yu0 = UP.markerCol >= 0 ? cellAt(r0, UP.markerCol) : '';
+      var branch0 = yu0.replace(/^[\(（]\s*[oOxX○×?？]\s*[\)）]\s*/, '').trim();  // (O)/(X) 떼기
+      // 유치자를 지점으로 인정하는 조건:
+      //   ① 시트에 그 이름의 업체가 유일하게 존재하고
+      //   ② 그 이름에 소속의 업체명이 들어있을 것 (예: '서초점_옆커폰' ⊃ '옆커폰')
+      // ②가 없으면 담당 사원 이름(예: '최성훈')이 동명 업체와 잘못 엮일 수 있다.
+      var useBranch = false, branchTarget = '';
+      if (branch0) {
+        var core = normKey(companyName(raw0));
+        var cands0 = branchCandidates(branch0);
+        for (var ci = 0; ci < cands0.length && !useBranch; ci++) {
+          var hit0 = findExisting(cands0[ci]);
+          if (!hit0 || hit0 === 'AMBIGUOUS') continue;
+          // 지점명 안에 본사명이 있거나(서초점_옆커폰 ⊃ 옆커폰),
+          // 찾아낸 시트 업체가 본사 소속이거나(신에이치엠(홍성휴대폰멀티샵) ⊃ 신에이치엠)
+          var okA = !!core && normKey(cands0[ci]).indexOf(core) >= 0;
+          var okB = !!core && normKey(hit0.업체명 || '').indexOf(core) >= 0;
+          if (okA || okB) { useBranch = true; branchTarget = cands0[ci]; }
+        }
+      }
+      var target = useBranch ? branchTarget : raw0;
+      var k0 = normKey(target);
       if (!k0) continue;
-      if (!rawByKey[k0]) { rawByKey[k0] = raw0; order.push(k0); }
+      if (!rawByKey[k0]) {
+        rawByKey[k0] = raw0;                  // 기호 판정은 소속 원문 기준
+        branchByKey[k0] = useBranch ? branchTarget : '';
+        order.push(k0);
+      }
       if (!mkByKey[k0]) {
-        var m0 = UP.markerCol >= 0 ? markerFromName(cellAt(r0, UP.markerCol)) : '';
-        if (!m0) m0 = markerFromName(raw0);
+        var m0 = markerFromName(yu0) || markerFromName(raw0);
         if (m0) mkByKey[k0] = m0;
       }
     }
@@ -991,10 +1028,11 @@
     for (var oi = 0; oi < order.length; oi++) {
       var key = order[oi];
       var raw = rawByKey[key];
+      var branch = branchByKey[key];
       if (classify(raw) === '자점') { own++; continue; } // 자점은 등록/현행화 대상 아님
       // 마커: 표기가 없으면 판매점은 (O) 로 간주 (■□ 판매점은 대부분 표기 없음)
       var mk = defaultMarker(classify(raw), mkByKey[key] || '');
-      var ex = findExisting(raw);
+      var ex = findExisting(branch || raw);
       if (ex === 'AMBIGUOUS') { ambiguous++; continue; }   // 같은 이름 업체가 여럿 — 손대지 않음
       if (ex) {
         touched.push(ex.id);
@@ -1021,6 +1059,10 @@
         continue;
       }
       var g = classify(raw);
+      if (branch) {   // 유치자로 지점을 특정했는데 시트에 없으면, 임의로 만들지 않고 건너뛴다
+        ambiguous++;
+        continue;
+      }
       cands.push({ 소속원문: raw, 업체명: companyName(raw), 구분: g === '미분류' ? '' : g, 마커: mk, checked: true });
     }
     UP.candidates = cands;
@@ -1225,7 +1267,7 @@
     $('#logWrap').style.display = isLog ? '' : 'none';
     if (settle) {
       var f = $('#settleFrame');
-      if (!f.getAttribute('src')) f.setAttribute('src', 'settle.html?v=20260815i');
+      if (!f.getAttribute('src')) f.setAttribute('src', 'settle.html?v=20260815j');
       return;
     }
     if (isLog) { loadLogs(); return; }
