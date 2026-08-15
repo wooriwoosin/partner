@@ -272,6 +272,12 @@
     return '<span class="yn blank">–</span>';
   }
 
+  // 휴면(미거래) 판정 — 시트에 '휴면', '휴면(미거래)', '미거래' 등으로 적혀 있어도 모두 인식
+  function isDormant(c) {
+    var v = String((c && c.상태) || '').trim();
+    return v.indexOf('휴면') >= 0 || v.indexOf('미거래') >= 0;
+  }
+
   // 이번 주(월요일 00:00) 시작 시각
   function weekStart() {
     var d = new Date(); d.setHours(0, 0, 0, 0);
@@ -327,7 +333,7 @@
   // 현재 탭에서 "대상이 되는" 업체 집합 (계산서·계약 탭은 휴면 제외)
   function baseRows() {
     if (VIEW === 'invoice' || VIEW === 'contract') {
-      return STATE.all.filter(function (c) { return c.상태 !== '휴면'; });
+      return STATE.all.filter(function (c) { return !isDormant(c); });
     }
     return STATE.all;
   }
@@ -336,7 +342,7 @@
     var rows = baseRows();
     var s = { total: rows.length, 판매점: 0, 협력점: 0, 휴면: 0, 정발행: 0, 역발행: 0, 원천세: 0, 계약완료: 0 };
     rows.forEach(function (c) {
-      if (c.상태 === '휴면') { s.휴면++; }
+      if (isDormant(c)) { s.휴면++; }
       else if (s[c.업체구분] !== undefined) s[c.업체구분]++;   // 판매점·협력점 수는 휴면 제외
       if (s[c.계산서형태] !== undefined) s[c.계산서형태]++;
       if (c.위탁판매 === 'Y' && c.개인정보 === 'Y') s.계약완료++;
@@ -408,9 +414,9 @@
   function applyFilter() {
     var f = STATE.filter, q = f.q.trim().toLowerCase();
     STATE.view = STATE.all.filter(function (c) {
-      if ((VIEW === 'invoice' || VIEW === 'contract') && c.상태 === '휴면') return false; // 휴면(미거래)은 계산서·계약 화면에서 제외
-      if (f.dormant === 'only' && c.상태 !== '휴면') return false;
-      if (f.dormant === 'exclude' && c.상태 === '휴면') return false;
+      if ((VIEW === 'invoice' || VIEW === 'contract') && isDormant(c)) return false; // 휴면(미거래)은 계산서·계약 화면에서 제외
+      if (f.dormant === 'only' && !isDormant(c)) return false;
+      if (f.dormant === 'exclude' && isDormant(c)) return false;
       if (f.gubun && c.업체구분 !== f.gubun) return false;
       if (f.marker && (c.전달마커 || '') !== f.marker) return false;
       if (f.web && (c.웹접수 || '') !== f.web) return false;
@@ -488,7 +494,7 @@
       '<td style="text-align:center">' + yn(c.웹접수) + '</td>' +
       '<td style="text-align:center">' + yn(c.웹회신) + '</td>' +
       '<td>' + esc(c.소통채널 || '') + '</td>' +
-      '<td><span class="chip status-' + esc(c.상태) + '">' + esc(c.상태 === '휴면' ? '휴면(미거래)' : c.상태) + '</span></td>' +
+      '<td><span class="chip status-' + (isDormant(c) ? '휴면' : esc(c.상태)) + '">' + esc(isDormant(c) ? '휴면(미거래)' : c.상태) + '</span></td>' +
       '<td class="note-cell" title="' + esc(c.비고 || '') + '">' + esc(c.비고 || '') + '</td>';
   }
   function rowInvoice(c) {
@@ -575,7 +581,8 @@
     $('#f_wrep').value = c.웹회신 || '';
     $('#f_tel').value = c.연락처 || '';
     $('#f_rep').value = c.대표자 || '';
-    $('#f_status').value = c.상태 || '활성';
+    // 시트에 '휴면(미거래)' 등 변형으로 적혀 있어도 선택값이 비지 않도록 정규화
+    $('#f_status').value = isDormant(c) ? '휴면' : '활성';
     $('#f_note').value = c.비고 || '';
     $('#f_inv').value = c.계산서형태 || '';
     $('#f_corp').value = c.법인 || '';
@@ -1048,7 +1055,7 @@
         var newSoan = applySymbolOnly(ex.소속원문, raw);
         var soanChanged = String(ex.소속원문 || '').trim() !== newSoan;
         if (ex.업체구분 === '자점') soanChanged = true;   // 자점→판매/협력점 재분류도 '변경'
-        var wake = UP.isOpeningList && ex.상태 === '휴면';   // 개통 실적이 있을 때만 되살린다
+        var wake = UP.isOpeningList && isDormant(ex);   // 개통 실적이 있을 때만 되살린다
         var mkChanged = !!mk && String(ex.전달마커 || '').trim() !== mk;
         if (soanChanged || wake || mkChanged) {
           var g2 = classify(raw);
@@ -1275,7 +1282,7 @@
     $('#logWrap').style.display = isLog ? '' : 'none';
     if (settle) {
       var f = $('#settleFrame');
-      if (!f.getAttribute('src')) f.setAttribute('src', 'settle.html?v=20260815k');
+      if (!f.getAttribute('src')) f.setAttribute('src', 'settle.html?v=20260815l');
       return;
     }
     if (isLog) { loadLogs(); return; }
