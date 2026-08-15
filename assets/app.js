@@ -552,8 +552,9 @@
   function openModal(id) {
     var c = id ? JSON.parse(JSON.stringify(STATE.all.filter(function (x) { return String(x.id) === String(id); })[0])) : blankCompany();
     EDITING = c;
-    // 현재 탭에 해당하는 섹션만 표시
-    var sec = VIEW === 'invoice' ? 'invoice' : (VIEW === 'contract' ? 'contract' : 'base');
+    // 신규 등록은 항상 기본 정보 폼 · 수정은 현재 탭에 해당하는 섹션만
+    var sec = !id ? 'base'
+      : (VIEW === 'invoice' ? 'invoice' : (VIEW === 'contract' ? 'contract' : 'base'));
     $('#secBase').style.display = sec === 'base' ? '' : 'none';
     $('#secInvoice').style.display = sec === 'invoice' ? '' : 'none';
     $('#secContract').style.display = sec === 'contract' ? '' : 'none';
@@ -651,6 +652,16 @@
     var c = collectForm();
     if (!c.소속원문) { toast('소속(원문)을 입력하세요', 'err'); return; }
     if (!c.업체구분) { toast('업체구분을 선택하세요', 'err'); return; }
+    if (!c.id) {
+      // 수기 등록도 NEW 배지가 뜨도록 등록일을 남긴다
+      c.등록일 = new Date().toISOString().slice(0, 10);
+      if (!c.출처) c.출처 = '수기등록';
+      var dupe = STATE.allRaw.filter(function (x) {
+        return normKey(x.업체명) === normKey(c.업체명) || normKey(x.소속원문) === normKey(c.소속원문);
+      })[0];
+      if (dupe && !confirm('이미 같은 이름의 업체가 있습니다.\n\n  ' + (dupe.소속원문 || dupe.업체명) +
+          '\n\n그래도 새로 등록할까요? (지점처럼 실제로 다른 업체일 때만 진행하세요)')) return;
+    }
     if (!LIVE) { toast('데모 모드입니다. 저장하려면 config.js 에 API_URL 을 설정하세요', 'err'); return; }
     setBusy(true);
     apiPost({ action: 'upsert', company: c }).then(function (res) {
@@ -1214,7 +1225,7 @@
     $('#logWrap').style.display = isLog ? '' : 'none';
     if (settle) {
       var f = $('#settleFrame');
-      if (!f.getAttribute('src')) f.setAttribute('src', 'settle.html?v=20260815h');
+      if (!f.getAttribute('src')) f.setAttribute('src', 'settle.html?v=20260815i');
       return;
     }
     if (isLog) { loadLogs(); return; }
@@ -1269,6 +1280,7 @@
     if (LIVE) { badge.textContent = '● 라이브(구글시트 연동)'; badge.className = 'badge-mode live'; }
     else { badge.textContent = '● 데모(읽기전용 · seed.json)'; badge.className = 'badge-mode demo'; }
     $('#uploadBtn').style.display = LIVE ? 'inline-block' : 'none';
+    $('#addBtn').style.display = LIVE ? 'inline-block' : 'none';
 
     // 툴바 이벤트
     $('#search').addEventListener('input', function () { STATE.filter.q = this.value; applyFilter(); });
@@ -1285,6 +1297,7 @@
       b.addEventListener('click', function () { setView(b.getAttribute('data-view')); });
     });
     $('#uploadBtn').addEventListener('click', openUpload);
+    $('#addBtn').addEventListener('click', function () { openModal(null); });
     $('#reloadBtn').addEventListener('click', load);
 
     // 개통리스트 업로드 모달
