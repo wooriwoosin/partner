@@ -11,7 +11,7 @@
  */
 
 // 배포된 코드 버전 — 프론트가 이 값으로 "구버전 배포"를 감지해 경고를 띄웁니다.
-var CODE_VERSION = '2026-08-15c';
+var CODE_VERSION = '2026-08-15d';
 
 var SPREADSHEET_ID = '1shhA5RdXP7DiaMIyR33bTG2jFj4SFqumYflY0lF0pwc';
 var SHEET_NAME = '업체관리';
@@ -576,8 +576,13 @@ function 일괄현행화_(apply) {
     for (var i = 0; i < vs.length && !ex; i++) ex = byKey[vs[i]] || null;
     if (!ex) { notFound++; report.push(['매칭없음', '', '', raw, '시트에 없는 업체 — 아무 것도 하지 않음']); return; }
 
-    // 판매점은 (X) 표기가 있을 때만 X, 그 외(O·?·표기없음)는 모두 O
-    var mk = (g === '판매점') ? (mkBy[k] === 'X' ? 'X' : 'O') : (mkBy[k] || '');
+    // 마커 규칙
+    //  · 판매점 : (X) 표기가 있을 때만 X, 그 외(O·?·표기없음)는 모두 O
+    //  · 협력점 : 원장에 표기가 있으면 그 값, 표기가 없으면 시트의 기존 값을 그대로 둔다
+    //            (표기 없다고 기존 마커를 빈칸으로 지우면 수기로 맞춰둔 값이 날아감)
+    var mk = (g === '판매점')
+      ? (mkBy[k] === 'X' ? 'X' : 'O')
+      : (mkBy[k] || String(ex['전달마커'] || ''));
     var sym = (String(raw).match(/^([■□★☆◆◇]+)/) || ['', ''])[1];
     var inc = /^[◆◇]/.test(raw) ? 'Y' : 'N';
     var web = (mk === 'X') ? 'Y' : 'N';                // X=직접 웹처리 Y/Y · 그 외 N/N
