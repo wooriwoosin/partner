@@ -88,7 +88,7 @@
   }
 
   /* ============ 상태 ============ */
-  var STATE = { all: [], view: [], filter: { gubun: '', marker: '', web: '', dormant: false, inv: '', sym: '', con: '', q: '' } };
+  var STATE = { all: [], view: [], filter: { gubun: '', marker: '', web: '', dormant: '', inv: '', sym: '', con: '', q: '' } };
   var VIEW = 'base'; // base | invoice | contract | settle
   var SORT = { key: '', dir: 1 };   // 표 헤더 클릭 정렬
   var EDITING = null; // 수정 중인 원본 레코드 (출처 등 폼에 없는 필드 보존용)
@@ -376,24 +376,23 @@
     $$('#stats .stat').forEach(function (el) {
       el.onclick = function () {
         var key = el.getAttribute('data-key');
-        if (key === 'total') { STATE.filter.gubun = ''; STATE.filter.inv = ''; STATE.filter.con = ''; STATE.filter.dormant = false; }
-        else if (key === 'dormant') { STATE.filter.dormant = !STATE.filter.dormant; }
-        else if (key.indexOf('inv:') === 0) {
-          var v = key.slice(4);
-          STATE.filter.inv = STATE.filter.inv === v ? '' : v;
-        }
-        else if (key.indexOf('con:') === 0) {
-          var cv = key.slice(4);
-          STATE.filter.con = STATE.filter.con === cv ? '' : cv;
-        }
-        else { STATE.filter.gubun = STATE.filter.gubun === key ? '' : key; }
+        var was = STATE.filter;
+        var q = was.q;
+        // 카드를 누르면 나머지 필터는 모두 초기화한다 — 카드 숫자와 목록 개수가 어긋나지 않도록
+        var f = { gubun: '', marker: '', web: '', dormant: '', inv: '', sym: '', con: '', q: q };
+        if (key === 'total') { /* 전체 */ }
+        else if (key === 'dormant') { if (was.dormant !== 'only') f.dormant = 'only'; }
+        else if (key.indexOf('inv:') === 0) { var v = key.slice(4); if (was.inv !== v) f.inv = v; }
+        else if (key.indexOf('con:') === 0) { var cv = key.slice(4); if (was.con !== cv) f.con = cv; }
+        else { if (was.gubun !== key) { f.gubun = key; f.dormant = 'exclude'; } }  // 판매점·협력점 카드는 '거래중'만
+        STATE.filter = f;
         syncControls(); applyFilter();
       };
     });
   }
   function statCard(cls, key, n, label) {
     var active = (key === STATE.filter.gubun)
-      || (key === 'dormant' && STATE.filter.dormant)
+      || (key === 'dormant' && STATE.filter.dormant === 'only')
       || (key.indexOf('inv:') === 0 && STATE.filter.inv === key.slice(4))
       || (key.indexOf('con:') === 0 && STATE.filter.con === key.slice(4))
       || (key === 'total' && !STATE.filter.gubun && !STATE.filter.inv && !STATE.filter.con && !STATE.filter.dormant);
@@ -405,7 +404,8 @@
     var f = STATE.filter, q = f.q.trim().toLowerCase();
     STATE.view = STATE.all.filter(function (c) {
       if ((VIEW === 'invoice' || VIEW === 'contract') && c.상태 === '휴면') return false; // 휴면(미거래)은 계산서·계약 화면에서 제외
-      if (f.dormant && c.상태 !== '휴면') return false;
+      if (f.dormant === 'only' && c.상태 !== '휴면') return false;
+      if (f.dormant === 'exclude' && c.상태 === '휴면') return false;
       if (f.gubun && c.업체구분 !== f.gubun) return false;
       if (f.marker && (c.전달마커 || '') !== f.marker) return false;
       if (f.web && (c.웹접수 || '') !== f.web) return false;
@@ -706,7 +706,7 @@
   }
 
   /* ============ 개통리스트 업로드 → 신규 등록 + 기호/소속 현행화 ============ */
-  var UP = { grid: [], headerRow: -1, colIdx: -1, markerCol: -1, candidates: [], changes: [], touched: [] };
+  var UP = { grid: [], headerRow: -1, colIdx: -1, markerCol: -1, isOpeningList: false, candidates: [], changes: [], touched: [] };
 
   // 중복 비교용 키: 숫자접두/기호/마커괄호/공백 제거 + 소문자
   function normKey(s) {
@@ -719,7 +719,7 @@
   }
 
   function openUpload() {
-    UP = { grid: [], headerRow: -1, colIdx: -1, markerCol: -1, candidates: [], changes: [], touched: [] };
+    UP = { grid: [], headerRow: -1, colIdx: -1, markerCol: -1, isOpeningList: false, candidates: [], changes: [], touched: [] };
     $('#upFile').value = '';
     $('#upColWrap').style.display = 'none';
     $('#upSummary').style.display = 'none';
@@ -768,9 +768,16 @@
   }
 
   var NAME_HEADERS = ['협력점', '소속', '소속점', '업체', '업체명', '거래처', '판매점', '대리점', '매장', '상호', '상호명'];
-  var MARKER_HEADERS = ['유치자', '담당자', '담당', '영업사원', '사원'];
+  var MARKER_HEADERS = ['유치자', '사원명', '담당자', '담당', '영업사원', '사원'];
 
   function cellAt(r, c) { return String((UP.grid[r] || [])[c] || '').trim(); }
+
+  // 개통리스트인지(= 이번주 개통 실적으로 볼지) 판별.
+  // 전체사원관리(소속 원장)는 개통 실적이 아니므로 개통일을 기록하지 않는다.
+  function detectKind() {
+    var hdr = (UP.grid[UP.headerRow] || []).map(function (x) { return String(x || '').replace(/\s+/g, ''); });
+    UP.isOpeningList = hdr.indexOf('개통일') >= 0 || hdr.indexOf('개통상태') >= 0 || hdr.indexOf('협력점') >= 0;
+  }
 
   // 값이 "업체 소속"처럼 생겼는지 점수화 (헤더 이름이 깨졌을 때의 대비책)
   function colScore(colIdx, startRow, existing) {
@@ -822,6 +829,8 @@
       }
       if (best.col >= 0 && best.score >= 15) { UP.headerRow = best.row; UP.colIdx = best.col; }
     }
+
+    detectKind();
 
     // 선택 UI — 헤더가 깨져도 "실제 값 미리보기"로 고를 수 있게
     var opts = [];
@@ -879,19 +888,30 @@
       if (k1 && !byKey[k1]) byKey[k1] = x;
       if (k2 && !byKey[k2]) byKey[k2] = x;
     });
-    var seen = {}, cands = [], changes = [], same = 0, total = 0, own = 0;
-    var touched = [];   // 이번 개통리스트에 등장한 기존 업체 (개통일 기록용)
-    for (var r = UP.headerRow + 1; r < UP.grid.length; r++) {
-      var raw = String((UP.grid[r] || [])[UP.colIdx] || '').trim();
-      if (!raw) continue;
+    // 1차 스캔: 같은 소속이 여러 줄(사원 여러 명)일 수 있으므로 마커를 모아둔다
+    var order = [], rawByKey = {}, mkByKey = {}, total = 0;
+    for (var r0 = UP.headerRow + 1; r0 < UP.grid.length; r0++) {
+      var raw0 = String((UP.grid[r0] || [])[UP.colIdx] || '').trim();
+      if (!raw0) continue;
       total++;
-      var key = normKey(raw);
-      if (!key || seen[key]) continue;
-      seen[key] = 1;
+      var k0 = normKey(raw0);
+      if (!k0) continue;
+      if (!rawByKey[k0]) { rawByKey[k0] = raw0; order.push(k0); }
+      if (!mkByKey[k0]) {
+        var m0 = UP.markerCol >= 0 ? markerFromName(cellAt(r0, UP.markerCol)) : '';
+        if (!m0) m0 = markerFromName(raw0);
+        if (m0) mkByKey[k0] = m0;
+      }
+    }
+
+    var cands = [], changes = [], same = 0, own = 0;
+    var touched = [];   // 이번 리스트에 등장한 기존 업체 (개통일 기록용)
+    for (var oi = 0; oi < order.length; oi++) {
+      var key = order[oi];
+      var raw = rawByKey[key];
       if (classify(raw) === '자점') { own++; continue; } // 자점은 등록/현행화 대상 아님
-      // 전달마커는 '유치자' 열의 (O)/(X) 표기에서 가져온다 (소속 원문에는 없음)
-      var mk = UP.markerCol >= 0 ? markerFromName(cellAt(r, UP.markerCol)) : '';
-      if (!mk) mk = markerFromName(raw);
+      // 마커: 표기가 없으면 판매점은 (O) 로 간주 (■□ 판매점은 대부분 표기 없음)
+      var mk = defaultMarker(classify(raw), mkByKey[key] || '');
       var ex = byKey[key];
       if (ex) {
         touched.push(ex.id);
@@ -907,6 +927,7 @@
             old기호: ex.기호 || '', new기호: leadSymbol(raw),
             old구분: ex.업체구분 || '', new구분: g2 === '미분류' ? (ex.업체구분 || '') : g2,
             oldInc: ex.인센티브 || 'N', newInc: isIncentive(raw) ? 'Y' : 'N',
+            old구분2: ex.업체구분 || '',
             마커: mk, oldMk: String(ex.전달마커 || ''), mkChanged: mkChanged,
             soanChanged: soanChanged, wake: wake,
             checked: true
@@ -923,7 +944,9 @@
     $('#upSummary').style.display = '';
     $('#upSummary').innerHTML = '리스트 <b>' + total + '건</b> → 🆕 신규 <b>' + cands.length + '개</b> · 🔄 변경 <b>' + changes.length + '개</b> · 기존과 동일 <b>' + same + '건</b>'
       + (own ? ' · 자점 제외 <b>' + own + '건</b>' : '')
-      + '<br><span style="color:var(--muted)">적용하면 이 리스트에 등장한 <b>' + touched.length + '개</b> 업체에 <b>이번주 개통</b> 기록이 남습니다 — 계약 미완료 업체는 계약 탭에서 <b>⚠️ 확인필요</b>로 모입니다.</span>';
+      + '<br><span style="color:var(--muted)">' + (UP.isOpeningList
+        ? '📅 개통리스트로 인식 — 적용하면 등장한 <b>' + touched.length + '개</b> 업체에 <b>이번주 개통</b> 기록이 남고, 계약 미완료 업체는 계약 탭 <b>⚠️ 확인필요</b>로 모입니다.'
+        : '👥 소속 원장(사원관리)으로 인식 — 기호·마커 현행화만 하고 개통 기록은 남기지 않습니다.') + '</span>';
     renderUploadTable();
     renderChangeTable();
   }
@@ -988,11 +1011,11 @@
     var n = UP.candidates.filter(function (c) { return c.checked; }).length;
     var m = UP.changes.filter(function (c) { return c.checked; }).length;
     var t = UP.touched.length;
-    $('#upSave').disabled = (n + m + t) === 0;
+    $('#upSave').disabled = (n + m + (UP.isOpeningList ? t : 0)) === 0;
     var parts = [];
     if (n) parts.push('신규 ' + n + '개');
     if (m) parts.push('변경 ' + m + '개');
-    if (t) parts.push('개통기록 ' + t + '개');
+    if (t && UP.isOpeningList) parts.push('개통기록 ' + t + '개');
     $('#upSave').textContent = parts.length ? parts.join(' · ') + ' 적용' : '선택 항목 적용';
   }
 
@@ -1013,7 +1036,8 @@
         소속원문: soan, 업체명: p.업체명, 기호: leadSymbol(soan), 업체구분: g,
         인센티브: isIncentive(soan) ? 'Y' : 'N', 전달마커: mk,
         소통채널: d.소통채널, 웹접수: d.웹접수, 웹회신: d.웹회신,
-        상태: '활성', 출처: '개통리스트', 최근개통일: today
+        상태: '활성', 출처: UP.isOpeningList ? '개통리스트' : '소속원장',
+        최근개통일: UP.isOpeningList ? today : ''
       };
     });
     // 현행화: 소속/기호/구분/인센티브/마커만 갱신 (계산서·계약 값은 유지)
@@ -1034,15 +1058,17 @@
         }
       }
       if (c.wake) u.상태 = '활성';
-      u.최근개통일 = today;
+      if (UP.isOpeningList) u.최근개통일 = today;
       return u;
     });
-    // 변경이 없는 업체도 "이번주 개통" 사실은 기록한다 (계약 확인필요 판정 근거)
-    var chgIds = {};
-    updates.forEach(function (u) { chgIds[String(u.id)] = 1; });
-    UP.touched.forEach(function (id) {
-      if (!chgIds[String(id)]) updates.push({ id: id, 최근개통일: today });
-    });
+    // 개통리스트일 때만: 변경이 없는 업체도 "이번주 개통" 사실을 기록 (확인필요 판정 근거)
+    if (UP.isOpeningList) {
+      var chgIds = {};
+      updates.forEach(function (u) { chgIds[String(u.id)] = 1; });
+      UP.touched.forEach(function (id) {
+        if (!chgIds[String(id)]) updates.push({ id: id, 최근개통일: today });
+      });
+    }
 
     $('#upSave').disabled = true;
     var jobs = [];
@@ -1115,7 +1141,7 @@
     $('#logWrap').style.display = isLog ? '' : 'none';
     if (settle) {
       var f = $('#settleFrame');
-      if (!f.getAttribute('src')) f.setAttribute('src', 'settle.html?v=20260815c');
+      if (!f.getAttribute('src')) f.setAttribute('src', 'settle.html?v=20260815d');
       return;
     }
     if (isLog) { loadLogs(); return; }
@@ -1126,10 +1152,8 @@
     $('#fltInv').style.display = v === 'invoice' ? '' : 'none';
     $('#fltSym').style.display = v === 'invoice' ? '' : 'none';
     $('#fltCon').style.display = v === 'contract' ? '' : 'none';
-    // 다른 탭의 전용 필터는 초기화 (숨겨진 필터가 몰래 거르는 것 방지)
-    if (v !== 'base') { STATE.filter.marker = ''; STATE.filter.web = ''; }
-    if (v !== 'invoice') { STATE.filter.inv = ''; STATE.filter.sym = ''; }
-    if (v !== 'contract') { STATE.filter.con = ''; }
+    // 탭을 바꾸면 필터를 모두 초기화한다 (이전 탭 필터가 남아 목록이 줄어드는 것 방지)
+    STATE.filter = { gubun: '', marker: '', web: '', dormant: '', inv: '', sym: '', con: '', q: STATE.filter.q };
     syncControls();
     applyFilter();
   }
@@ -1180,7 +1204,7 @@
     $('#fltSym').addEventListener('change', function () { STATE.filter.sym = this.value; applyFilter(); });
     $('#fltCon').addEventListener('change', function () { STATE.filter.con = this.value; applyFilter(); });
     $('#resetBtn').addEventListener('click', function () {
-      STATE.filter = { gubun: '', marker: '', web: '', inv: '', sym: '', con: '', q: '' };
+      STATE.filter = { gubun: '', marker: '', web: '', dormant: '', inv: '', sym: '', con: '', q: '' };
       $('#search').value = ''; syncControls(); applyFilter();
     });
     $$('.tab-btn').forEach(function (b) {
