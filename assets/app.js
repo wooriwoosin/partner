@@ -339,6 +339,9 @@
     return STATE.all;
   }
 
+  // 계산서형태 "본 항목" 3종 — 이 셋 중 아무것도 아니면 '계산서정보 없음/기타'
+  var INV_MAIN = ['정발행', '역발행', '원천세'];
+
   function computeStats() {
     var rows = baseRows();
     var s = { total: rows.length, 판매점: 0, 협력점: 0, 휴면: 0, 정발행: 0, 역발행: 0, 원천세: 0, 계약완료: 0 };
@@ -360,14 +363,14 @@
     ];
     if (VIEW === 'invoice') {
       var noInv = baseRows().filter(function (c) {
-        return ['정발행', '역발행', '원천세'].indexOf(c.계산서형태) < 0;
+        return INV_MAIN.indexOf(c.계산서형태) < 0;
       }).length;
       cards = [
         statCard('', 'total', s.total, '전체 업체'),
         statCard('inv1', 'inv:정발행', s.정발행, '정발행'),
         statCard('inv2', 'inv:역발행', s.역발행, '역발행'),
         statCard('inv3', 'inv:원천세', s.원천세, '원천세'),
-        statCard('hold', 'inv:__none', noInv, '계산서정보 없음/기타')
+        statCard('hold', 'inv:__other', noInv, '계산서정보 없음/기타')
       ];
     } else if (VIEW === 'contract') {
       var cs = { 완료: 0, 진행중: 0, 미진행: 0, 만료: 0, 제외: 0, 정보없음: 0, 확인필요: 0, 발송대기: 0 };
@@ -423,7 +426,9 @@
       if (f.web && (c.웹접수 || '') !== f.web) return false;
       if (f.inv) {
         var iv = c.계산서형태 || '';
-        if (f.inv === '__none' ? iv !== '' : iv !== f.inv) return false;
+        if (f.inv === '__other') { if (INV_MAIN.indexOf(iv) >= 0) return false; }   // 빈칸 + 기타 + 그 밖의 값
+        else if (f.inv === '__none') { if (iv !== '') return false; }               // 완전히 빈칸만
+        else if (iv !== f.inv) return false;
       }
       if (f.sym && String(c.기호 || '') !== f.sym) return false;
       if (f.con && conState(c) !== f.con) return false;

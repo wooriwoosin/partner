@@ -11,7 +11,7 @@
  */
 
 // 배포된 코드 버전 — 프론트가 이 값으로 "구버전 배포"를 감지해 경고를 띄웁니다.
-var CODE_VERSION = '2026-08-15h';
+var CODE_VERSION = '2026-08-21a';
 
 var SPREADSHEET_ID = '1shhA5RdXP7DiaMIyR33bTG2jFj4SFqumYflY0lF0pwc';
 var SHEET_NAME = '업체관리';
@@ -132,14 +132,35 @@ function json_(obj, callback) {
 
 /* ------------------------- 인증 ------------------------- */
 function hashPw_(id, pw) {
-  var raw = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, SECRET + '|' + id + '|' + pw);
+  var raw = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, SECRET + '|' + id + '|' + pw, Utilities.Charset.UTF_8);
   return Utilities.base64EncodeWebSafe(raw);
+}
+// 옛 방식(문자셋 미지정) — 한글 아이디가 '???' 로 뭉개져 서로 같은 해시가 됐다.
+// 로그인 때만 대조용으로 쓰고, 맞으면 즉시 새 해시로 바꿔 저장한다.
+function hashPwLegacy_(id, pw) {
+  return Utilities.base64EncodeWebSafe(
+    Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, SECRET + '|' + id + '|' + pw));
+}
+// 사용자 시트의 비번해시 칸만 갱신
+function setUserHash_(id, hash) {
+  var sh = userSheet_(); var last = sh.getLastRow();
+  if (last < 2) return false;
+  var idx = userColIdx_(sh);
+  var v = sh.getRange(2, 1, last - 1, idx.__len).getValues();
+  for (var i = 0; i < v.length; i++) {
+    if (String(v[i][idx['아이디']]).trim() === String(id).trim()) {
+      sh.getRange(i + 2, idx['비번해시'] + 1).setValue(hash);
+      return true;
+    }
+  }
+  return false;
 }
 function hmac_(msg) {
   return Utilities.base64EncodeWebSafe(Utilities.computeHmacSha256Signature(msg, SECRET));
 }
 function makeToken_(id, role) {
-  var payload = Utilities.base64EncodeWebSafe(id + '|' + role);
+  // 문자셋을 지정하지 않으면 한글 아이디가 '???' 로 뭉개져 변경로그에 이름이 안 남는다
+  var payload = Utilities.base64EncodeWebSafe(id + '|' + role, Utilities.Charset.UTF_8);
   return payload + '.' + hmac_(payload);
 }
 function verifyToken_(token) {
@@ -147,8 +168,10 @@ function verifyToken_(token) {
   var parts = String(token).split('.');
   if (parts.length !== 2) return null;
   if (hmac_(parts[0]) !== parts[1]) return null;
-  var dec = Utilities.newBlob(Utilities.base64DecodeWebSafe(parts[0])).getDataAsString();
+  var dec = Utilities.newBlob(Utilities.base64DecodeWebSafe(parts[0])).getDataAsString('UTF-8');
   var f = dec.split('|');
+  // 옛 토큰은 한글 아이디가 '???' 로 깨져 있다 → 거부해서 다시 로그인하게 한다
+  if (!f[0] || f[0].indexOf('?') >= 0) return null;
   return { id: f[0], role: f[1] };
 }
 
@@ -224,7 +247,14 @@ function login_(id, pw) {
   var u = findUser_(id);
   if (!u) return { ok: false, error: '아이디 또는 비밀번호가 올바르지 않습니다.' };
   if (String(u.상태) === '정지') return { ok: false, error: '정지된 계정입니다.' };
-  if (u.비번해시 !== hashPw_(String(id).trim(), pw)) return { ok: false, error: '아이디 또는 비밀번호가 올바르지 않습니다.' };
+  var want = hashPw_(String(id).trim(), pw);
+  if (u.비번해시 !== want) {
+    // 옛 방식으로 저장된 해시면 통과시키고, 곧바로 새 방식으로 바꿔 저장한다 (사용자는 아무것도 안 해도 됨)
+    if (u.비번해시 !== hashPwLegacy_(String(id).trim(), pw)) {
+      return { ok: false, error: '아이디 또는 비밀번호가 올바르지 않습니다.' };
+    }
+    try { setUserHash_(u.아이디, want); } catch (e) {}
+  }
   return { ok: true, token: makeToken_(u.아이디, u.권한 || 'admin'), name: u.이름 || u.아이디, role: u.권한 || 'admin' };
 }
 function registerFirstAdmin_(id, pw, name) {
@@ -305,7 +335,9 @@ function readLogs_() {
 function changeMyPw_(user, oldPw, newPw) {
   var u = findUser_(user.id);
   if (!u) return { ok: false, error: '계정을 찾을 수 없습니다.' };
-  if (u.비번해시 !== hashPw_(user.id, oldPw)) return { ok: false, error: '현재 비밀번호가 올바르지 않습니다.' };
+  if (u.비번해시 !== hashPw_(user.id, oldPw) && u.비번해시 !== hashPwLegacy_(user.id, oldPw)) {
+    return { ok: false, error: '현재 비밀번호가 올바르지 않습니다.' };
+  }
   if (String(newPw || '').length < 4) return { ok: false, error: '새 비밀번호는 4자 이상이어야 합니다.' };
   var sh = userSheet_(); var last = sh.getLastRow();
   var idx = userColIdx_(sh);
