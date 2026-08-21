@@ -11,7 +11,7 @@
  */
 
 // 배포된 코드 버전 — 프론트가 이 값으로 "구버전 배포"를 감지해 경고를 띄웁니다.
-var CODE_VERSION = '2026-08-15g';
+var CODE_VERSION = '2026-08-15h';
 
 var SPREADSHEET_ID = '1shhA5RdXP7DiaMIyR33bTG2jFj4SFqumYflY0lF0pwc';
 var SHEET_NAME = '업체관리';
@@ -346,11 +346,16 @@ function readAll_() {
   var hdr = sheetHeader_(sh);
   var values = sh.getRange(2, 1, last - 1, hdr.length).getValues();
   var idIdx = hdr.indexOf('id');
-  return values.filter(function (r) {
-    return String(idIdx >= 0 ? r[idIdx] : r[0]).trim() !== '';
-  }).map(function (r) {
-    var o = {}; hdr.forEach(function (h, i) { if (h) o[h] = r[i]; }); return o;
-  });
+  var out = [];
+  for (var i = 0; i < values.length; i++) {
+    var r = values[i];
+    if (String(idIdx >= 0 ? r[idIdx] : r[0]).trim() === '') continue;   // 빈 행 건너뜀
+    var o = {};
+    hdr.forEach(function (h, j) { if (h) o[h] = r[j]; });
+    o.__row = i + 2;   // 실제 시트 행 번호 — 빈 행이 섞여 있어도 정확한 위치에 쓰기 위함
+    out.push(o);
+  }
+  return out;
 }
 // 시트 헤더 순서에 맞춰 한 행을 만든다 (컬럼 이름 기준이므로 순서가 바뀌어도 안전)
 function rowFromObj_(o, hdr) {
@@ -417,14 +422,25 @@ function upsert_(company, user) {
           var before = rows[i];
           var diffs = [];
           for (var f in company) {
-            if (f === 'id' || f === '수정일시') continue;
+            if (f === 'id' || f === '수정일시' || f === '__row') continue;
             var ov = before[f] === undefined || before[f] === null ? '' : String(before[f]);
             var nv = company[f] === undefined || company[f] === null ? '' : String(company[f]);
             if (ov !== nv) diffs.push(f + ': ' + (ov || '(없음)') + ' → ' + (nv || '(없음)'));
           }
-          var merged = before; for (var k in company) merged[k] = company[k];
+          var merged = before;
+          for (var k in company) { if (k !== '__row') merged[k] = company[k]; }
           var hdrU = sheetHeader_(sh);
-          sh.getRange(i + 2, 1, 1, hdrU.length).setValues([rowFromObj_(merged, hdrU)]);
+          // 안전장치: 쓰기 직전에 그 행의 id 가 정말 이 업체인지 확인한다.
+          // (행 번호가 어긋나면 남의 데이터를 덮어쓰게 되므로 차라리 실패시킨다)
+          var idCol = hdrU.indexOf('id') + 1;
+          if (idCol > 0) {
+            var atRow = String(sh.getRange(before.__row, idCol).getValue()).trim();
+            if (atRow !== String(company.id)) {
+              throw new Error('저장 위치가 어긋났습니다 (' + before.__row + '행 id=' + (atRow || '비어있음') +
+                ', 저장하려던 id=' + company.id + '). 시트를 새로고침한 뒤 다시 시도하세요.');
+            }
+          }
+          sh.getRange(before.__row, 1, 1, hdrU.length).setValues([rowFromObj_(merged, hdrU)]);
           if (diffs.length) log_(user, '수정', merged['업체명'] || ('id ' + merged.id), diffs.join(' | '));
           return { ok: true, mode: 'update', company: merged };
         }
@@ -447,6 +463,7 @@ function bulkUpsert_(companies, user) {
     var byId = {};
     rows.forEach(function (r, i) { byId[String(r.id)] = i; });
     var now = new Date(); var updated = 0; var names = [];
+    var touchedRows = {};
     companies.forEach(function (c) {
       if (!c || c.id === undefined || c.id === '') return;
       var i = byId[String(c.id)];
@@ -455,13 +472,16 @@ function bulkUpsert_(companies, user) {
       if (c['상태'] === '활성' && rows[i]['상태'] === '휴면') note += '(휴면→활성)';
       else if (c['기호'] !== undefined && String(c['기호']) !== String(rows[i]['기호'] || '')) note += '(' + (rows[i]['기호'] || '없음') + '→' + c['기호'] + ')';
       names.push(note);
-      for (var k in c) { if (k !== 'id') rows[i][k] = c[k]; }
+      for (var k in c) { if (k !== 'id' && k !== '__row') rows[i][k] = c[k]; }
       rows[i]['수정일시'] = now;
+      touchedRows[rows[i].__row] = rows[i];
       updated++;
     });
+    // 바뀐 행만 원래 위치에 그대로 덮어쓴다 (빈 행이 섞여 있어도 위치가 밀리지 않음)
     var hdrB = sheetHeader_(sh);
-    var out = rows.map(function (r) { return rowFromObj_(r, hdrB); });
-    if (out.length) sh.getRange(2, 1, out.length, hdrB.length).setValues(out);
+    Object.keys(touchedRows).forEach(function (rn) {
+      sh.getRange(Number(rn), 1, 1, hdrB.length).setValues([rowFromObj_(touchedRows[rn], hdrB)]);
+    });
     if (updated) log_(user, '개통리스트 현행화', updated + '개 업체', names.slice(0, 40).join(', ') + (names.length > 40 ? ' 외 ' + (names.length - 40) + '개' : ''));
     return { ok: true, updated: updated };
   } finally { lock.releaseLock(); }
@@ -475,7 +495,7 @@ function remove_(id, user) {
     for (var i = 0; i < rows.length; i++) {
       if (String(rows[i].id) === String(id)) {
         var nm = rows[i]['업체명'] || ('id ' + id);
-        sh.deleteRow(i + 2);
+        sh.deleteRow(rows[i].__row);
         log_(user, '삭제', nm, '소속: ' + (rows[i]['소속원문'] || ''));
         return { ok: true, deleted: id };
       }
@@ -513,6 +533,62 @@ function 계정추가_직접(id, pw, name, role) {
 }
 
 function setup() { dataSheet_(); userSheet_(); return 'ok'; }
+
+/* ============================================================
+ * 진단() — "저장했는데 시트에 반영이 안 돼요" 원인 찾기
+ * ------------------------------------------------------------
+ * Apps Script 편집기에서 진단() 실행 → 실행로그(Ctrl+Enter)에 결과가 뜹니다.
+ * 시트를 전혀 바꾸지 않습니다 (읽기 전용).
+ * ============================================================ */
+function 진단() {
+  var sh = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
+  if (!sh) return '시트를 찾을 수 없습니다: ' + SHEET_NAME;
+  var lastRow = sh.getLastRow(), lastCol = sh.getLastColumn();
+  var hdr = sh.getRange(1, 1, 1, lastCol).getValues()[0].map(function (h) { return String(h).trim(); });
+  var lines = [];
+  lines.push('코드버전: ' + CODE_VERSION);
+  lines.push('시트 크기: ' + lastRow + '행 × ' + lastCol + '열');
+  lines.push('헤더: ' + hdr.join(' | '));
+
+  // 1) HEADERS 중 시트에 없는 컬럼
+  var missing = HEADERS.filter(function (h) { return hdr.indexOf(h) < 0; });
+  lines.push('■ 없는 컬럼: ' + (missing.length ? missing.join(', ') : '없음 ✔'));
+
+  // 2) 헤더 중복 / 빈 헤더
+  var seenH = {}, dupH = [], blankH = [];
+  hdr.forEach(function (h, i) {
+    if (h === '') { blankH.push(i + 1); return; }
+    if (seenH[h]) dupH.push(h + '(' + seenH[h] + '열,' + (i + 1) + '열)');
+    else seenH[h] = i + 1;
+  });
+  lines.push('■ 중복 헤더: ' + (dupH.length ? dupH.join(', ') + ' ← 이러면 저장이 엉뚱한 열로 갑니다' : '없음 ✔'));
+  lines.push('■ 빈 헤더 열: ' + (blankH.length ? blankH.join(',') + '열 (데이터가 있으면 확인 필요)' : '없음 ✔'));
+
+  // 3) id 가 빈 행 (중간에 있으면 그 아래 저장이 한 칸씩 밀립니다)
+  var idIdx = hdr.indexOf('id'); if (idIdx < 0) idIdx = 0;
+  var nameIdx = hdr.indexOf('업체명');
+  var blankIds = [], dupIds = [], seen = {}, total = 0;
+  if (lastRow >= 2) {
+    var vals = sh.getRange(2, 1, lastRow - 1, lastCol).getValues();
+    for (var i = 0; i < vals.length; i++) {
+      var row = i + 2;
+      var id = String(vals[i][idIdx] || '').trim();
+      var nm = nameIdx >= 0 ? String(vals[i][nameIdx] || '').trim() : '';
+      var empty = vals[i].every(function (v) { return String(v).trim() === ''; });
+      if (id === '') { if (!empty || row < lastRow) blankIds.push(row + '행' + (nm ? '(' + nm + ')' : '(완전 빈 행)')); continue; }
+      total++;
+      if (seen[id]) dupIds.push('id ' + id + ' → ' + seen[id] + '행, ' + row + '행' + (nm ? ' (' + nm + ')' : ''));
+      else seen[id] = row;
+    }
+  }
+  lines.push('■ 정상 업체 행: ' + total + '개');
+  lines.push('■ id 가 빈 행: ' + (blankIds.length ? blankIds.join(', ') + ' ← 이 위에 있으면 아래 업체 저장이 밀립니다' : '없음 ✔'));
+  lines.push('■ 중복 id: ' + (dupIds.length ? dupIds.join(' / ') + ' ← 저장은 위쪽 행에만 되고 아래 행이 화면에 보일 수 있습니다' : '없음 ✔'));
+
+  var msg = lines.join('\n');
+  Logger.log(msg);
+  return msg;
+}
 
 /* ============================================================
  * 일괄현행화 — 소속 원장(전체사원관리)으로 기호·마커를 한 번에 맞추기
@@ -653,6 +729,7 @@ function 일괄현행화_(apply) {
       ex['인센티브'] = inc; ex['전달마커'] = mk;
       ex['웹접수'] = web; ex['웹회신'] = web;
       ex['수정일시'] = new Date();
+      ex.__dirty = true;
       // 상태·계산서·계약은 건드리지 않음
     }
   });
@@ -660,8 +737,10 @@ function 일괄현행화_(apply) {
   if (apply && changed) {
     var sh = dataSheet_();
     var hdr = sheetHeader_(sh);
-    var out = rows.map(function (r) { return rowFromObj_(r, hdr); });
-    sh.getRange(2, 1, out.length, hdr.length).setValues(out);
+    rows.forEach(function (r) {
+      if (!r.__dirty) return;
+      sh.getRange(r.__row, 1, 1, hdr.length).setValues([rowFromObj_(r, hdr)]);
+    });
     log_({ id: 'system', name: '일괄현행화' }, '일괄현행화', changed + '개 업체', '소속·기호·구분·마커·웹접수/웹회신 갱신');
   }
 
