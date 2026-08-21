@@ -11,7 +11,7 @@
  */
 
 // 배포된 코드 버전 — 프론트가 이 값으로 "구버전 배포"를 감지해 경고를 띄웁니다.
-var CODE_VERSION = '2026-08-15f';
+var CODE_VERSION = '2026-08-15g';
 
 var SPREADSHEET_ID = '1shhA5RdXP7DiaMIyR33bTG2jFj4SFqumYflY0lF0pwc';
 var SHEET_NAME = '업체관리';
@@ -152,13 +152,30 @@ function verifyToken_(token) {
   return { id: f[0], role: f[1] };
 }
 
+// 사용자 시트도 "컬럼 이름" 기준으로 읽는다 (열을 추가·이동해도 이름이 엉뚱한 칸을 가리키지 않도록)
+function userColIdx_(sh) {
+  var hdr = sheetHeader_(sh);
+  var idx = {};
+  hdr.forEach(function (h, i) { if (h) idx[h] = i; });
+  // 헤더가 비었거나 다르면 기본 순서로 대체
+  USER_HEADERS.forEach(function (h, i) { if (idx[h] === undefined) idx[h] = i; });
+  idx.__len = Math.max(hdr.length, USER_HEADERS.length);
+  return idx;
+}
 function readUsers_() {
   var sh = userSheet_();
   var last = sh.getLastRow();
   if (last < 2) return [];
-  var v = sh.getRange(2, 1, last - 1, USER_HEADERS.length).getValues();
-  return v.filter(function (r) { return String(r[0]).trim() !== ''; }).map(function (r) {
-    return { 아이디: String(r[0]).trim(), 비번해시: String(r[1]), 이름: r[2], 권한: r[3], 상태: r[4] };
+  var idx = userColIdx_(sh);
+  var v = sh.getRange(2, 1, last - 1, idx.__len).getValues();
+  return v.filter(function (r) { return String(r[idx['아이디']]).trim() !== ''; }).map(function (r) {
+    return {
+      아이디: String(r[idx['아이디']]).trim(),
+      비번해시: String(r[idx['비번해시']]),
+      이름: String(r[idx['이름']] || '').trim(),
+      권한: String(r[idx['권한']] || '').trim(),
+      상태: String(r[idx['상태']] || '').trim()
+    };
   });
 }
 function findUser_(id) {
@@ -195,9 +212,10 @@ function deleteUser_(id) {
   id = String(id || '').trim();
   var sh = userSheet_(); var last = sh.getLastRow();
   if (last < 3) return { ok: false, error: '마지막 계정은 삭제할 수 없습니다.' };
-  var v = sh.getRange(2, 1, last - 1, 1).getValues();
+  var idx = userColIdx_(sh);
+  var v = sh.getRange(2, 1, last - 1, idx.__len).getValues();
   for (var i = 0; i < v.length; i++) {
-    if (String(v[i][0]).trim() === id) { sh.deleteRow(i + 2); return { ok: true, deleted: id }; }
+    if (String(v[i][idx['아이디']]).trim() === id) { sh.deleteRow(i + 2); return { ok: true, deleted: id }; }
   }
   return { ok: false, error: '없는 아이디입니다.' };
 }
@@ -236,10 +254,11 @@ function requireAdmin_(token) {
 // 로그 기록은 본 작업을 방해하면 안 되므로 실패해도 조용히 무시
 function log_(user, action, target, detail) {
   try {
+    var uid = (user && user.id) || '';
     logSheet_().appendRow([
       new Date(),
-      (user && user.id) || '',
-      (user && user.name) || '',
+      uid,
+      (user && user.name) || uid,   // 이름이 비어 있으면 아이디로 대체
       action || '',
       target || '',
       detail || ''
@@ -289,10 +308,11 @@ function changeMyPw_(user, oldPw, newPw) {
   if (u.비번해시 !== hashPw_(user.id, oldPw)) return { ok: false, error: '현재 비밀번호가 올바르지 않습니다.' };
   if (String(newPw || '').length < 4) return { ok: false, error: '새 비밀번호는 4자 이상이어야 합니다.' };
   var sh = userSheet_(); var last = sh.getLastRow();
-  var v = sh.getRange(2, 1, last - 1, 1).getValues();
+  var idx = userColIdx_(sh);
+  var v = sh.getRange(2, 1, last - 1, idx.__len).getValues();
   for (var i = 0; i < v.length; i++) {
-    if (String(v[i][0]).trim() === user.id) {
-      sh.getRange(i + 2, 2).setValue(hashPw_(user.id, newPw));
+    if (String(v[i][idx['아이디']]).trim() === user.id) {
+      sh.getRange(i + 2, idx['비번해시'] + 1).setValue(hashPw_(user.id, newPw));
       log_(user, '비밀번호변경', user.id, '본인 비밀번호 변경');
       return { ok: true };
     }
@@ -306,10 +326,11 @@ function resetPw_(admin, targetId, newPw) {
   if (!findUser_(targetId)) return { ok: false, error: '없는 아이디입니다.' };
   if (String(newPw || '').length < 4) return { ok: false, error: '비밀번호는 4자 이상이어야 합니다.' };
   var sh = userSheet_(); var last = sh.getLastRow();
-  var v = sh.getRange(2, 1, last - 1, 1).getValues();
+  var idx2 = userColIdx_(sh);
+  var v = sh.getRange(2, 1, last - 1, idx2.__len).getValues();
   for (var i = 0; i < v.length; i++) {
-    if (String(v[i][0]).trim() === targetId) {
-      sh.getRange(i + 2, 2).setValue(hashPw_(targetId, newPw));
+    if (String(v[i][idx2['아이디']]).trim() === targetId) {
+      sh.getRange(i + 2, idx2['비번해시'] + 1).setValue(hashPw_(targetId, newPw));
       log_(admin, '비밀번호초기화', targetId, '관리자가 비밀번호 재설정');
       return { ok: true };
     }

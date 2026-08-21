@@ -561,16 +561,26 @@
       법인: '', 대표자: '', 계산서형태: '', 수신방법: '', 계산서비고: '', 위탁판매: '', 개인정보: '', 보증보험: '', 사업자등록증: '', 계약제외: '', 계약비고: '', 계약서발송: '', 출처: '' };
   }
   var SECTION_TITLES = { base: '기본 정보 수정', invoice: '계산서 수정', contract: '계약서·보증보험 수정' };
-  function openModal(id) {
-    var c = id ? JSON.parse(JSON.stringify(STATE.all.filter(function (x) { return String(x.id) === String(id); })[0])) : blankCompany();
-    EDITING = c;
-    // 신규 등록은 항상 기본 정보 폼 · 수정은 현재 탭에 해당하는 섹션만
-    var sec = !id ? 'base'
-      : (VIEW === 'invoice' ? 'invoice' : (VIEW === 'contract' ? 'contract' : 'base'));
+  var MODAL_NAME = '';
+  function showModalSection(sec, name) {
+    if (name !== undefined) MODAL_NAME = name;
     $('#secBase').style.display = sec === 'base' ? '' : 'none';
     $('#secInvoice').style.display = sec === 'invoice' ? '' : 'none';
     $('#secContract').style.display = sec === 'contract' ? '' : 'none';
-    $('#modalTitle').textContent = (SECTION_TITLES[sec] || '업체 수정') + ' · ' + (c.업체명 || '신규');
+    $$('#modalTabs .mtab').forEach(function (b) {
+      b.classList.toggle('active', b.getAttribute('data-sec') === sec);
+    });
+    $('#modalTitle').textContent = (SECTION_TITLES[sec] || '업체 수정') + ' · ' + MODAL_NAME;
+    if (sec === 'base') updatePreview();
+    if (sec === 'contract') renderConState();
+  }
+  function openModal(id) {
+    var c = id ? JSON.parse(JSON.stringify(STATE.all.filter(function (x) { return String(x.id) === String(id); })[0])) : blankCompany();
+    EDITING = c;
+    // 어느 탭에서 열든 세 영역을 모두 편집할 수 있고, 처음 보이는 영역만 현재 탭에 맞춘다
+    var sec = !id ? 'base'
+      : (VIEW === 'invoice' ? 'invoice' : (VIEW === 'contract' ? 'contract' : 'base'));
+    showModalSection(sec, c.업체명 || '신규');
     $('#f_id').value = c.id || '';
     $('#f_soan').value = c.소속원문 || '';
     $('#f_name').value = c.업체명 || '';
@@ -596,8 +606,7 @@
     $('#f_cexc').value = c.계약제외 || '';
     $('#f_connote').value = c.계약비고 || '';
     $('#deleteBtn').style.display = id ? 'inline-block' : 'none';
-    if (sec === 'base') updatePreview();
-    if (sec === 'contract') renderConState();
+    showModalSection(sec);   // 값을 채운 뒤 다시 그려 미리보기·계약상태가 최신값을 반영하게
     $('#overlay').classList.add('open');
   }
   function closeModal() { $('#overlay').classList.remove('open'); }
@@ -725,7 +734,8 @@
     }
     $('#logTbody').innerHTML = rows.map(function (l) {
       return '<tr><td style="white-space:nowrap">' + esc(l.일시) + '</td>' +
-        '<td>' + esc(l.이름 || l.아이디) + '</td>' +
+        '<td>' + esc(l.이름 || l.아이디 || '(알 수 없음)') +
+          (l.아이디 && l.이름 && l.이름 !== l.아이디 ? ' <span class="muted-id">(' + esc(l.아이디) + ')</span>' : '') + '</td>' +
         '<td><span class="chip">' + esc(l.작업) + '</span></td>' +
         '<td>' + esc(l.대상) + '</td>' +
         '<td class="log-detail" title="' + esc(l.상세) + '">' + esc(l.상세) + '</td></tr>';
@@ -1282,7 +1292,7 @@
     $('#logWrap').style.display = isLog ? '' : 'none';
     if (settle) {
       var f = $('#settleFrame');
-      if (!f.getAttribute('src')) f.setAttribute('src', 'settle.html?v=20260815l');
+      if (!f.getAttribute('src')) f.setAttribute('src', 'settle.html?v=20260815m');
       return;
     }
     if (isLog) { loadLogs(); return; }
@@ -1370,6 +1380,9 @@
     $('#cancelBtn').addEventListener('click', closeModal);
     $('#saveBtn').addEventListener('click', saveCompany);
     $('#deleteBtn').addEventListener('click', deleteCompany);
+    $$('#modalTabs .mtab').forEach(function (b) {
+      b.addEventListener('click', function () { showModalSection(b.getAttribute('data-sec')); });
+    });
     $('#f_soan').addEventListener('blur', autofillFromSoan);
     $('#autofillBtn').addEventListener('click', autofillFromSoan);
     ['#f_wt', '#f_pi', '#f_cexc', '#f_sent'].forEach(function (sel) {
