@@ -300,21 +300,22 @@
     return !!d && (Date.now() - d.getTime()) < 7 * 86400000;
   }
 
-  // 계약 상태 판정: 제외 > 완료 > 확인필요 > 만료 > 진행중 > 미진행 > 정보없음
+  // 계약 상태 판정: 제외 > 완료 > 진행중 > 발송대기 > 확인필요 > 정보없음/만료/미진행
   function conState(c) {
     if (c.계약제외 === 'Y') return '제외';
     if (c.위탁판매 === 'Y' && c.개인정보 === 'Y') return '완료';
     if (c.위탁판매 === 'Y' || c.개인정보 === 'Y') return '진행중';
-    // 서명 전이지만 이번 주 개통이 있으면 → 확인필요 (계약서를 보냈어도 서명은 받아야 함)
+    // 계약서를 보냈으면 서명 기다리는 중 — 이번 주 개통이 있어도 독촉 대상이 아니다
+    if (c.계약서발송 === 'Y') return '발송대기';
+    // 아직 안 보냈는데 이번 주 개통이 있으면 → 확인필요 (계약서 발송 독촉 대상)
     if (openedThisWeek(c)) return '확인필요';
-    if (c.계약서발송 === 'Y') return '발송대기';   // 보냈고 서명 기다리는 중
     if (!c.위탁판매) return '정보없음';
     return (c.계약비고 || '').indexOf('만료') >= 0 ? '만료' : '미진행';
   }
 
   // 계약상태는 저장되는 값이 아니라 아래 항목들로 자동 판정됩니다.
   var CON_RULE = '계약제외 Y → <b>제외</b> · 위탁판매 빈칸 → <b>정보없음</b> · 위탁판매 Y +\u200b 개인정보 Y → <b>완료</b>'
-    + ' · 둘 중 하나만 Y → <b>진행중</b> · 이번주 개통 있고 서명 전 → <b>확인필요</b> · 계약서발송 Y → <b>발송대기</b> · 계약비고에 "만료" 포함 → <b>만료</b> · 그 외 → <b>미진행</b>'
+    + ' · 둘 중 하나만 Y → <b>진행중</b> · 계약서발송 Y → <b>발송대기</b> · 아직 안 보냈는데 이번주 개통 있음 → <b>확인필요</b> · 계약비고에 "만료" 포함 → <b>만료</b> · 그 외 → <b>미진행</b>'
     + '<br><span style="color:var(--muted)">※ 보증보험은 일부 업체만 진행하므로 계약상태에 영향을 주지 않습니다.</span>';
   function renderConState() {
     var box = document.getElementById('conStateBox');
@@ -373,7 +374,7 @@
       baseRows().forEach(function (c) { cs[conState(c)]++; });
       cards = [
         statCard('', 'total', s.total, '전체 업체'),
-        statCard('warn', 'con:확인필요', cs.확인필요, '⚠️ 확인필요(이번주 개통)'),
+        statCard('warn', 'con:확인필요', cs.확인필요, '⚠️ 확인필요(이번주 개통·미발송)'),
         statCard('partner', 'con:완료', cs.완료, '계약완료'),
         statCard('own', 'con:진행중', cs.진행중, '진행중'),
         statCard('own', 'con:발송대기', cs.발송대기, '발송함(서명대기)'),
