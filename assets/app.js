@@ -24,9 +24,20 @@
       '개 중 마커O ' + mkO + ' · 웹접수·회신 N ' + wN;
   }
 
+  // 이 프론트엔드가 기대하는 Apps Script 최소 버전.
+  // 배포를 안 하면 새 컬럼(예: 계약서발송)이 시트에 생기지 않아 저장이 조용히 사라진다.
+  var EXPECTED_VER = '2026-08-21a';
   function checkServerVersion() {
     var el = document.getElementById('verWarn');
-    if (el) el.style.display = (LIVE && !SERVER_VER) ? '' : 'none';
+    if (!el) return;
+    if (!LIVE) { el.style.display = 'none'; return; }
+    var stale = !SERVER_VER || SERVER_VER < EXPECTED_VER;   // 'YYYY-MM-DD?' 형식이라 문자열 비교로 충분
+    el.style.display = stale ? '' : 'none';
+    if (stale) {
+      var now = document.getElementById('verNow');
+      if (now) now.textContent = SERVER_VER ? ('현재 배포: ' + SERVER_VER + ' · 필요: ' + EXPECTED_VER)
+                                            : ('버전을 알 수 없음 · 필요: ' + EXPECTED_VER);
+    }
   }
 
   /* ============ 분류 엔진 (build_seed.py 와 동일 규칙) ============ */
