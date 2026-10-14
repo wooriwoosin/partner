@@ -290,6 +290,11 @@
   }
 
   // 이번 주(월요일 00:00) 시작 시각
+  // 한국시간 기준 오늘(YYYY-MM-DD).
+  // new Date().toISOString() 은 UTC 라서 오전 9시 이전에는 "어제" 가 되어버린다.
+  function todayKST() {
+    return new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);
+  }
   function weekStart() {
     var d = new Date(); d.setHours(0, 0, 0, 0);
     var dow = (d.getDay() + 6) % 7;          // 월=0 … 일=6
@@ -695,7 +700,7 @@
     if (!c.업체구분) { toast('업체구분을 선택하세요', 'err'); return; }
     if (!c.id) {
       // 수기 등록도 NEW 배지가 뜨도록 등록일을 남긴다
-      c.등록일 = new Date().toISOString().slice(0, 10);
+      c.등록일 = todayKST();
       if (!c.출처) c.출처 = '수기등록';
       var dupe = STATE.allRaw.filter(function (x) {
         return normKey(x.업체명) === normKey(c.업체명) || normKey(x.소속원문) === normKey(c.소속원문);
@@ -1191,7 +1196,7 @@
     var picked = UP.candidates.filter(function (c) { return c.checked; });
     var pickedChg = UP.changes.filter(function (c) { return c.checked; });
     if (!picked.length && !pickedChg.length && !UP.touched.length) return;
-    var today = new Date().toISOString().slice(0, 10);
+    var today = todayKST();
     if (!LIVE) { toast('데모 모드에서는 등록할 수 없습니다', 'err'); return; }
 
     var companies = picked.map(function (p) {

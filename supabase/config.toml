@@ -1,0 +1,7 @@
+# 수파베이스 CLI 설정
+# project_id 는 본인 프로젝트 참조(ref)로 바꿔주세요. (대시보드 Settings → General)
+
+[functions.api]
+# 이 앱은 자체 토큰(아이디+비번)으로 인증하므로 수파베이스 JWT 검사를 끈다.
+# 켜두면 브라우저가 anon 키를 Authorization 헤더로 보내야 하고, 그러면 preflight 가 생긴다.
+verify_jwt = false
