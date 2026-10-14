@@ -26,7 +26,7 @@
 
   // 이 프론트엔드가 기대하는 Apps Script 최소 버전.
   // 배포를 안 하면 새 컬럼(예: 계약서발송)이 시트에 생기지 않아 저장이 조용히 사라진다.
-  var EXPECTED_VER = '2026-08-21a';
+  var EXPECTED_VER = '2026-10-14a';
   function checkServerVersion() {
     var el = document.getElementById('verWarn');
     if (!el) return;

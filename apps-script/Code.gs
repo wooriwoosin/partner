@@ -11,7 +11,7 @@
  */
 
 // 배포된 코드 버전 — 프론트가 이 값으로 "구버전 배포"를 감지해 경고를 띄웁니다.
-var CODE_VERSION = '2026-08-21a';
+var CODE_VERSION = '2026-10-14a';
 
 var SPREADSHEET_ID = '1shhA5RdXP7DiaMIyR33bTG2jFj4SFqumYflY0lF0pwc';
 var SHEET_NAME = '업체관리';
@@ -19,11 +19,31 @@ var USER_SHEET = '사용자';
 var LOG_SHEET = '변경로그';
 var LOG_TZ = 'Asia/Seoul';
 
-// 서명/해시용 비밀키. 그냥 두셔도 되고, 바꾸면 기존 토큰·비번해시가 무효화됩니다.
+// 비밀번호 해시용 키.
+// ⚠️ 이 파일은 공개 저장소에 올라가므로 여기에 "새" 비밀값을 적지 마세요.
+//    이 값은 기존 비밀번호를 그대로 쓰기 위해 남겨둔 옛 키이며, 토큰 서명에는 더 이상 쓰이지 않습니다.
+//    (수파베이스로 옮길 때 새 키로 다시 해시할 예정)
 var SECRET = 'wnet-2026-8f3a9c1e-partner-secret';
 
-// 초기 관리자 (비밀번호는 해시로만 보관 · 사용자 0명일 때 자동 생성)
-var BOOTSTRAP_ADMIN = { 아이디: 'kmj', 해시: 'uEHJRXREBKPZumiEQLC2XVoaAJBR0F_beTg8hG5ElhE=', 이름: '김민정', 권한: 'admin' };
+// 토큰 서명키 — 저장소에 두지 않는다.
+// 스크립트 속성에 없으면 스스로 난수를 만들어 저장하므로, 이 값은 사용자의 구글 계정 밖으로 나가지 않는다.
+// (코드·채팅·깃허브 어디에도 남지 않음)
+function tokenSecret_() {
+  var props = PropertiesService.getScriptProperties();
+  var v = props.getProperty('TOKEN_SECRET');
+  if (!v) {
+    v = Utilities.base64EncodeWebSafe(Utilities.getUuid() + '|' + Utilities.getUuid());
+    props.setProperty('TOKEN_SECRET', v);
+  }
+  return v;
+}
+
+// 초기 관리자 (사용자 0명일 때만 자동 생성).
+// 해시는 저장소에 두지 않는다 — 필요하면 스크립트 속성 BOOTSTRAP_ADMIN_HASH 에 넣는다.
+var BOOTSTRAP_ADMIN = { 아이디: 'kmj', 이름: '김민정', 권한: 'admin' };
+function bootstrapHash_() {
+  return PropertiesService.getScriptProperties().getProperty('BOOTSTRAP_ADMIN_HASH') || '';
+}
 
 // 시트 컬럼 정의 — 화면에서 실제로 쓰는 항목만, 업무 순서대로 정리
 // ※ 데이터는 "컬럼 이름"으로 읽고 씁니다. 시트에서 열 순서를 바꿔도 안전합니다.
@@ -156,7 +176,7 @@ function setUserHash_(id, hash) {
   return false;
 }
 function hmac_(msg) {
-  return Utilities.base64EncodeWebSafe(Utilities.computeHmacSha256Signature(msg, SECRET));
+  return Utilities.base64EncodeWebSafe(Utilities.computeHmacSha256Signature(msg, tokenSecret_()));
 }
 function makeToken_(id, role) {
   // 문자셋을 지정하지 않으면 한글 아이디가 '???' 로 뭉개져 변경로그에 이름이 안 남는다
@@ -216,8 +236,9 @@ function addUserHash_(id, hash, name, role) {
 }
 function ensureAdmin_() {
   var sh = userSheet_();
-  if (sh.getLastRow() < 2 && BOOTSTRAP_ADMIN && BOOTSTRAP_ADMIN.해시) {
-    addUserHash_(BOOTSTRAP_ADMIN.아이디, BOOTSTRAP_ADMIN.해시, BOOTSTRAP_ADMIN.이름, BOOTSTRAP_ADMIN.권한);
+  var bh = bootstrapHash_();
+  if (sh.getLastRow() < 2 && bh) {
+    addUserHash_(BOOTSTRAP_ADMIN.아이디, bh, BOOTSTRAP_ADMIN.이름, BOOTSTRAP_ADMIN.권한);
   }
 }
 function usersPublic_() {
