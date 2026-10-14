@@ -9,3 +9,7 @@ package-lock.json
 # 로컬 동기화 도구: 자격증명/설정은 커밋 금지
 partner-sync/config.json
 partner-sync/downloads/
+
+# 이전용 CSV — 개인정보·비밀번호 해시가 들어 있어 저장소에 넣지 않는다
+업체_임포트.csv
+사용자_임포트.csv
