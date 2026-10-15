@@ -9,9 +9,10 @@
  *    공개 키(publishable/anon)만 넣을 것 — secret/service_role 키는 절대 금지.
  */
 window.APP_CONFIG = {
-  // ▼ 현재 운영 중 (앱스크립트). 수파베이스 ping 확인되면 아래 줄과 맞바꾼다.
-  API_URL: 'https://script.google.com/macros/s/AKfycbxPoVd7ZZaOj35mxKyZpNixlG6pcRMybJh63t1vOt6CT-PfS8r4pMtG14h0HXhKdx7c5A/exec',
-  // API_URL: 'https://iwfiilgjiqkdsuybqwwk.supabase.co/functions/v1/dynamic-processor',   // ← 전환 예정
+  // ▼ 운영 중 (수파베이스 Edge Function) — 2026-10-15 전환
+  API_URL: 'https://iwfiilgjiqkdsuybqwwk.supabase.co/functions/v1/dynamic-processor',
+  // 되돌릴 때 쓸 옛 앱스크립트 주소 (한동안 남겨둔다)
+  // API_URL: 'https://script.google.com/macros/s/AKfycbxPoVd7ZZaOj35mxKyZpNixlG6pcRMybJh63t1vOt6CT-PfS8r4pMtG14h0HXhKdx7c5A/exec',
   // 수파베이스 Edge Function 이 "키 검사" 켜진 채로 배포됐을 때만 채운다.
   // 공개해도 되는 키(publishable/anon)만 넣을 것. secret/service_role 키는 절대 금지.
   API_KEY: '',
