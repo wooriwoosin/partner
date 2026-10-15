@@ -505,7 +505,7 @@ async function 처리(action: string, p: Record<string, unknown>): Promise<unkno
   }
 }
 
-Deno.serve(async (req: Request) => {
+async function handler(req: Request): Promise<Response> {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
 
   try {
@@ -533,4 +533,8 @@ Deno.serve(async (req: Request) => {
     const msg = err instanceof Error ? err.message : String(err);
     return json({ ok: false, error: msg }, status);
   }
-});
+}
+
+// 수파베이스 Edge 런타임의 현재 방식(기본 내보내기).
+// 예전 방식인 Deno.serve(handler) 와 같은 동작입니다.
+export default { fetch: handler };

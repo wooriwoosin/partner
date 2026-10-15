@@ -8,6 +8,9 @@
  */
 window.APP_CONFIG = {
   API_URL: 'https://script.google.com/macros/s/AKfycbxPoVd7ZZaOj35mxKyZpNixlG6pcRMybJh63t1vOt6CT-PfS8r4pMtG14h0HXhKdx7c5A/exec',
+  // 수파베이스 Edge Function 이 "키 검사" 켜진 채로 배포됐을 때만 채운다.
+  // 공개해도 되는 키(publishable/anon)만 넣을 것. secret/service_role 키는 절대 금지.
+  API_KEY: '',
   WRITE_TOKEN: '',      // <-- Code.gs 의 WRITE_TOKEN 과 동일하게 (안 쓰면 빈칸)
   SHEET_ID: '1shhA5RdXP7DiaMIyR33bTG2jFj4SFqumYflY0lF0pwc',
   SHEET_URL: 'https://docs.google.com/spreadsheets/d/1shhA5RdXP7DiaMIyR33bTG2jFj4SFqumYflY0lF0pwc/edit',

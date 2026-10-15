@@ -113,7 +113,7 @@
     }
     // 캐시 방지: 같은 URL 이면 브라우저가 이전 응답을 재사용해 시트 수정이 반영되지 않는다
     var url = CFG.API_URL + '?action=list&token=' + encodeURIComponent(TOKEN) + '&_=' + Date.now();
-    return fetch(url, { method: 'GET', cache: 'no-store' })
+    return fetch(url, { method: 'GET', cache: 'no-store', headers: CFG.API_KEY ? apiHeaders() : {} })
       .then(function (r) { return r.json(); })
       .then(function (d) {
         if (!d.ok) throw new Error(d.error || 'list 실패');
@@ -121,11 +121,21 @@
         return d.companies || [];
       });
   }
+  // 수파베이스 Edge Function 이 "키 검사(Verify JWT)" 켜진 채로 배포됐을 때만 필요.
+  // config.js 에 API_KEY 가 있으면 함께 보낸다 (공개해도 되는 키 — 실제 인증은 우리 토큰이 한다).
+  function apiHeaders() {
+    var h = { 'Content-Type': 'text/plain;charset=utf-8' };  // preflight 회피
+    if (CFG.API_KEY) {
+      h['apikey'] = CFG.API_KEY;
+      h['Authorization'] = 'Bearer ' + CFG.API_KEY;
+    }
+    return h;
+  }
   function apiPost(payload) {
     payload.token = TOKEN;
     return fetch(CFG.API_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // preflight 회피
+      headers: apiHeaders(),
       body: JSON.stringify(payload)
     }).then(function (r) { return r.json(); })
       .then(function (d) { if (!d.ok) throw new Error(d.error || '요청 실패'); return d; });
@@ -134,7 +144,7 @@
   /* ============ 인증 ============ */
   function authPost(action, payload) {
     payload = payload || {}; payload.action = action;
-    return fetch(CFG.API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(payload) })
+    return fetch(CFG.API_URL, { method: 'POST', headers: apiHeaders(), body: JSON.stringify(payload) })
       .then(function (r) { return r.json(); });
   }
   var AUTH_MODE = 'login';
